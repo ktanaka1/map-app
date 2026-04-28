@@ -24,6 +24,33 @@ export interface InMemorySession {
 
 const sessions = new Map<string, InMemorySession>();
 
+/** participantId -> NodeJS.Timeout: 切断後のセッション削除タイマー */
+const disconnectTimers = new Map<string, NodeJS.Timeout>();
+
+const GRACE_PERIOD_MS = 15_000;
+
+/**
+ * 切断時に遅延削除をスケジュールする。
+ * callback は GRACE_PERIOD_MS 後に呼ばれる（rejoin されなかった場合のクリーンアップ用）。
+ */
+export function scheduleDisconnect(participantId: string, callback: () => void): void {
+  cancelDisconnect(participantId);
+  const timer = setTimeout(() => {
+    disconnectTimers.delete(participantId);
+    callback();
+  }, GRACE_PERIOD_MS);
+  disconnectTimers.set(participantId, timer);
+}
+
+/** リジョイン成功時などにタイマーをキャンセルする */
+export function cancelDisconnect(participantId: string): void {
+  const timer = disconnectTimers.get(participantId);
+  if (timer) {
+    clearTimeout(timer);
+    disconnectTimers.delete(participantId);
+  }
+}
+
 /** セッションIDに使う6文字英数字を生成 */
 function generateSessionId(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -159,6 +186,60 @@ export function findParticipantBySocket(socketId: string): {
     }
   }
   return undefined;
+}
+
+/**
+ * リジョイン時に既存のparticipantIdに対して新しいsocketIdでマッピングを更新する。
+ * 古いsocketIdのマッピングがあれば削除してから新しいものを登録する。
+ * 参加者がセッションに存在しない場合はundefinedを返す。
+ */
+export function updateSocketMapping(
+  sessionId: string,
+  participantId: string,
+  newSocketId: string
+): InMemorySession | undefined {
+  const entry = sessions.get(sessionId);
+  if (!entry) return undefined;
+
+  const participant = entry.session.participants.find((p) => p.id === participantId);
+  if (!participant) return undefined;
+
+  // 古いsocketIdのエントリを削除
+  for (const [oldSocketId, pid] of entry.socketToParticipant.entries()) {
+    if (pid === participantId) {
+      entry.socketToParticipant.delete(oldSocketId);
+      break;
+    }
+  }
+
+  entry.socketToParticipant.set(newSocketId, participantId);
+  return entry;
+}
+
+/**
+ * socketIdのマッピングのみ削除し、participants配列はそのままにする。
+ * リロード猶予期間中は参加者をセッションに残すために使用する。
+ */
+export function detachSocketFromParticipant(socketId: string): {
+  sessionId: string;
+  participantId: string;
+  entry: InMemorySession;
+} | undefined {
+  for (const [sessionId, entry] of sessions.entries()) {
+    const participantId = entry.socketToParticipant.get(socketId);
+    if (participantId) {
+      entry.socketToParticipant.delete(socketId);
+      return { sessionId, participantId, entry };
+    }
+  }
+  return undefined;
+}
+
+/** participantIdで参加者をセッションから削除する */
+export function removeParticipantById(sessionId: string, participantId: string): void {
+  const entry = sessions.get(sessionId);
+  if (!entry) return;
+  entry.session.participants = entry.session.participants.filter((p) => p.id !== participantId);
 }
 
 export function removeParticipantBySocket(socketId: string): {

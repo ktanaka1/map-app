@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { VoteChoice } from 'shared/types';
 import { useSocketContext } from '../hooks/useSocketContext';
+import RejoiningOverlay from '../components/RejoiningOverlay';
 
 function VotingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, submitVote } = useSocketContext();
+  const { state, submitVote, isRejoining } = useSocketContext();
   const { session, restaurants, votedRestaurantIds, voteProgress } = state;
 
   const participants = session?.participants ?? [];
@@ -22,6 +23,8 @@ function VotingPage() {
       navigate(`/session/${sessionId}/result`);
     }
   }, [session?.phase, sessionId, navigate]);
+
+  if (isRejoining) return <RejoiningOverlay />;
 
   const handleVote = (choice: VoteChoice) => {
     if (!currentRestaurant || !sessionId) return;

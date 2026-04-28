@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useSocketContext } from '../hooks/useSocketContext';
+import RejoiningOverlay from '../components/RejoiningOverlay';
 
 function WaitingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, confirmParticipants } = useSocketContext();
+  const { state, confirmParticipants, isRejoining } = useSocketContext();
   const { session, participants } = state;
 
   const joinUrl = `${window.location.origin}/join/${sessionId}`;
@@ -20,6 +21,8 @@ function WaitingPage() {
 
   const isHost = session ? state.me?.id === session.hostId || state.me?.isHost : false;
   const canConfirm = participants.length >= 2;
+
+  if (isRejoining) return <RejoiningOverlay />;
 
   const handleConfirmParticipants = () => {
     if (!sessionId) return;

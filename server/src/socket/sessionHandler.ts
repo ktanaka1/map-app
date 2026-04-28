@@ -11,7 +11,11 @@ import {
   setRestaurants,
   recordVote,
   buildVoteSummaries,
-  removeParticipantBySocket,
+  detachSocketFromParticipant,
+  removeParticipantById,
+  updateSocketMapping,
+  scheduleDisconnect,
+  cancelDisconnect,
 } from '../services/sessionStore';
 import { judgeVotes, isVotingComplete } from '../services/voteService';
 import { generateDummyRestaurants } from '../services/dummyRestaurants';
@@ -335,45 +339,107 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
   });
 
   /**
+   * ページリロード後のセッション再参加
+   * 新しいsocket.idでsocketToParticipantマップを更新し、ルームに再参加する。
+   */
+  socket.on('rejoin_session', (payload, callback) => {
+    const { sessionId, participantId } = payload;
+    try {
+      const entry = getSession(sessionId);
+      if (!entry) {
+        callback({ success: false, error: 'セッションが見つかりません' });
+        return;
+      }
+
+      const updated = updateSocketMapping(sessionId, participantId, socket.id);
+      if (!updated) {
+        callback({ success: false, error: '参加者が見つかりません' });
+        return;
+      }
+
+      const participant = updated.session.participants.find((p) => p.id === participantId);
+      if (!participant) {
+        callback({ success: false, error: '参加者が見つかりません' });
+        return;
+      }
+
+      // 切断猶予タイマーがあればキャンセル
+      cancelDisconnect(participantId);
+
+      socket.join(sessionId);
+      console.log(`[Socket] rejoin_session: session=${sessionId}, participant=${participantId}, socket=${socket.id}`);
+
+      callback({
+        success: true,
+        session: updated.session,
+        participant,
+        restaurants: updated.restaurants,
+      });
+    } catch (err) {
+      console.error('[Socket] rejoin_session error:', err);
+      callback({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
    * 切断時の処理
+   * リロードによる一時的な切断に対応するため、GRACE_PERIOD_MS の猶予を設けてから削除する。
+   * rejoin_session が届いた場合はタイマーをキャンセルする。
    */
   socket.on('disconnect', async () => {
     console.log(`[Socket] disconnect handled for socket: ${socket.id}`);
 
-    const removed = removeParticipantBySocket(socket.id);
-    if (!removed) return;
+    // socketマッピングのみ外す（participants配列はそのまま残す）
+    const detached = detachSocketFromParticipant(socket.id);
+    if (!detached) return;
 
-    const { sessionId, removedParticipantId, entry } = removed;
+    const { sessionId, participantId, entry } = detached;
     const { session } = entry;
 
-    // ソロセッションは切断処理不要
+    // ソロセッション: 猶予期間後に削除
     if (session.mode === 'solo') {
-      deleteSession(sessionId);
+      scheduleDisconnect(participantId, () => {
+        removeParticipantById(sessionId, participantId);
+        deleteSession(sessionId);
+        console.log(`[Socket] solo session deleted after grace period: ${sessionId}`);
+      });
       return;
     }
 
-    // ホストが切断
-    if (removedParticipantId === session.hostId) {
-      io.to(sessionId).emit('session_ended', { reason: 'host_left' });
-      deleteSession(sessionId);
-      console.log(`[Socket] session ended (host_left): ${sessionId}`);
+    // マルチ: ホストが切断 → 猶予期間後にセッション終了
+    if (participantId === session.hostId) {
+      scheduleDisconnect(participantId, () => {
+        const still = getSession(sessionId);
+        if (!still) return;
+        removeParticipantById(sessionId, participantId);
+        io.to(sessionId).emit('session_ended', { reason: 'host_left' });
+        deleteSession(sessionId);
+        console.log(`[Socket] session ended (host_left) after grace period: ${sessionId}`);
+      });
       return;
     }
 
-    // 参加者が切断 → 残り参加者をチェック
-    io.to(sessionId).emit('participant_left', {
-      participantId: removedParticipantId,
-      participants: session.participants,
+    // 参加者が切断 → 猶予期間後に実際に除名・残り人数チェック
+    scheduleDisconnect(participantId, () => {
+      const still = getSession(sessionId);
+      if (!still) return;
+
+      removeParticipantById(sessionId, participantId);
+
+      io.to(sessionId).emit('participant_left', {
+        participantId,
+        participants: still.session.participants,
+      });
+
+      // voting/resultフェーズ以外でホストのみになったらセッション終了
+      if (
+        still.session.phase !== 'result' &&
+        still.session.participants.length <= 1
+      ) {
+        io.to(sessionId).emit('session_ended', { reason: 'participant_left' });
+        deleteSession(sessionId);
+        console.log(`[Socket] session ended (participant_left) after grace period: ${sessionId}`);
+      }
     });
-
-    // voting/resultフェーズ以外でホストのみになったらセッション終了
-    if (
-      session.phase !== 'result' &&
-      session.participants.length <= 1
-    ) {
-      io.to(sessionId).emit('session_ended', { reason: 'participant_left' });
-      deleteSession(sessionId);
-      console.log(`[Socket] session ended (participant_left): ${sessionId}`);
-    }
   });
 }

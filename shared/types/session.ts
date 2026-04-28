@@ -1,3 +1,5 @@
+import type { Restaurant } from './restaurant';
+
 // セッションモード
 export type SessionMode = 'solo' | 'multi';
 
@@ -150,6 +152,15 @@ export interface ClientToServerEvents {
     },
     callback: (response: BaseResponse) => void
   ) => void;
+
+  /** ページリロード後にセッションへ再参加する */
+  rejoin_session: (
+    payload: {
+      sessionId: string;
+      participantId: string;
+    },
+    callback: (response: RejoinSessionResponse) => void
+  ) => void;
 }
 
 // ========================================
@@ -180,4 +191,10 @@ export interface BaseResponse {
 export interface JoinSessionResponse extends BaseResponse {
   session?: Session;
   participant?: Participant;
+}
+
+export interface RejoinSessionResponse extends BaseResponse {
+  session?: Session;
+  participant?: Participant;
+  restaurants?: Restaurant[];
 }

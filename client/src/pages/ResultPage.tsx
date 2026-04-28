@@ -1,12 +1,16 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Restaurant } from 'shared/types';
 import { useSocketContext } from '../hooks/useSocketContext';
+import { clearSessionFromStorage } from '../hooks/useSocket';
+import RejoiningOverlay from '../components/RejoiningOverlay';
 
 function ResultPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state } = useSocketContext();
+  const { state, isRejoining } = useSocketContext();
   const { votingResult, restaurants } = state;
+
+  if (isRejoining) return <RejoiningOverlay />;
 
   const getRestaurantById = (id: string): Restaurant | undefined =>
     restaurants.find((r) => r.id === id);
@@ -77,7 +81,10 @@ function ResultPage() {
         <div style={styles.footerInner}>
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => {
+              clearSessionFromStorage();
+              navigate('/');
+            }}
             style={styles.retryButton}
           >
             もう一度さがす

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocketContext } from '../hooks/useSocketContext';
 import { geocodeAddress } from '../services/geocodingService';
+import RejoiningOverlay from '../components/RejoiningOverlay';
 
 // 半径の選択肢
 const RADIUS_OPTIONS: { label: string; value: number }[] = [
@@ -15,7 +16,7 @@ type GpsStatus = 'acquiring' | 'ok' | 'denied' | 'error';
 function KeywordPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, addKeyword, removeKeyword, startSearch } = useSocketContext();
+  const { state, addKeyword, removeKeyword, startSearch, isRejoining } = useSocketContext();
   const { session } = state;
 
   // キーワード入力
@@ -141,6 +142,8 @@ function KeywordPage() {
     : gpsStatus === 'acquiring'
     ? '現在地を取得中...'
     : 'このキーワードで探す';
+
+  if (isRejoining) return <RejoiningOverlay />;
 
   return (
     <div style={styles.pageWrapper}>

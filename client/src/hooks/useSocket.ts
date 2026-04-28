@@ -9,6 +9,45 @@ import type {
 } from 'shared/types';
 import type { Restaurant } from 'shared/types';
 
+// ========================================
+// localStorage セッション保存ユーティリティ
+// ========================================
+
+const SESSION_STORAGE_KEY = 'map_app_session';
+
+export interface StoredSession {
+  sessionId: string;
+  participantId: string;
+  participantName: string;
+  isHost: boolean;
+}
+
+export function saveSessionToStorage(data: StoredSession): void {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // ストレージへの書き込みに失敗しても動作を継続する
+  }
+}
+
+export function loadSessionFromStorage(): StoredSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredSession;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSessionFromStorage(): void {
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // 無視
+  }
+}
+
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:3000';
@@ -30,6 +69,8 @@ export interface SessionState {
 export interface UseSocketReturn {
   socket: AppSocket;
   state: SessionState;
+  /** ページリロード後のリジョイン処理中フラグ */
+  isRejoining: boolean;
   createSession: (
     mode: 'solo' | 'multi',
     hostName: string,
@@ -54,6 +95,11 @@ export interface UseSocketReturn {
     restaurantId: string,
     choice: 'keep' | 'reject',
     callback: (res: { success: boolean; error?: string }) => void
+  ) => void;
+  rejoinSession: (
+    sessionId: string,
+    participantId: string,
+    callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant; restaurants?: Restaurant[] }) => void
   ) => void;
 }
 
@@ -86,6 +132,7 @@ function getSocket(): AppSocket {
 export function useSocket(): UseSocketReturn {
   const socketRef = useRef<AppSocket>(getSocket());
   const [state, setState] = useState<SessionState>(initialState);
+  const [isRejoining, setIsRejoining] = useState<boolean>(false);
 
   const updateState = useCallback((partial: Partial<SessionState>) => {
     setState((prev) => ({ ...prev, ...partial }));
@@ -100,6 +147,38 @@ export function useSocket(): UseSocketReturn {
 
     const onConnect = () => {
       console.log('[Socket] connected:', socket.id);
+
+      // 接続確立後にリジョイン試行
+      const stored = loadSessionFromStorage();
+      if (!stored) return;
+
+      // 現在のURLが /session/:sessionId/ パターンにマッチするか確認
+      const match = window.location.pathname.match(/^\/session\/([^/]+)\//);
+      if (!match) return;
+
+      const urlSessionId = match[1];
+      if (urlSessionId !== stored.sessionId) return;
+
+      setIsRejoining(true);
+      console.log('[Socket] rejoin_session 試行:', stored.sessionId);
+
+      socket.emit('rejoin_session', { sessionId: stored.sessionId, participantId: stored.participantId }, (res) => {
+        setIsRejoining(false);
+        if (res.success && res.session && res.participant) {
+          console.log('[Socket] rejoin_session 成功:', stored.sessionId);
+          setState({
+            ...initialState,
+            session: res.session,
+            me: res.participant,
+            participants: res.session.participants,
+            restaurants: res.restaurants ?? [],
+          });
+        } else {
+          console.warn('[Socket] rejoin_session 失敗:', res.error);
+          clearSessionFromStorage();
+          window.location.href = '/';
+        }
+      });
     };
 
     const onDisconnect = (reason: string) => {
@@ -182,6 +261,7 @@ export function useSocket(): UseSocketReturn {
 
     const onSessionEnded = (payload: { reason: string }) => {
       console.log('[Socket] session_ended:', payload.reason);
+      clearSessionFromStorage();
       updateState({
         error: `セッションが終了しました（理由: ${payload.reason}）`,
         session: null,
@@ -244,6 +324,12 @@ export function useSocket(): UseSocketReturn {
             me: res.participant!,
             participants: res.session!.participants,
           });
+          saveSessionToStorage({
+            sessionId: res.session!.id,
+            participantId: res.participant!.id,
+            participantName: res.participant!.name,
+            isHost: res.participant!.isHost,
+          });
         }
         callback(res);
       });
@@ -268,6 +354,12 @@ export function useSocket(): UseSocketReturn {
               me: res.participant!,
               participants: res.session!.participants,
             }));
+            saveSessionToStorage({
+              sessionId: res.session!.id,
+              participantId: res.participant!.id,
+              participantName: res.participant!.name,
+              isHost: res.participant!.isHost,
+            });
           }
           callback(res);
         }
@@ -330,9 +422,32 @@ export function useSocket(): UseSocketReturn {
     []
   );
 
+  const rejoinSession = useCallback(
+    (
+      sessionId: string,
+      participantId: string,
+      callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant; restaurants?: Restaurant[] }) => void
+    ) => {
+      socketRef.current.emit('rejoin_session', { sessionId, participantId }, (res) => {
+        if (res.success && res.session && res.participant) {
+          setState({
+            ...initialState,
+            session: res.session,
+            me: res.participant,
+            participants: res.session.participants,
+            restaurants: res.restaurants ?? [],
+          });
+        }
+        callback(res);
+      });
+    },
+    []
+  );
+
   return {
     socket: socketRef.current,
     state,
+    isRejoining,
     createSession,
     joinSession,
     confirmParticipants,
@@ -340,5 +455,6 @@ export function useSocket(): UseSocketReturn {
     removeKeyword,
     startSearch,
     submitVote,
+    rejoinSession,
   };
 }
