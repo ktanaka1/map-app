@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// セッション
+model Session {
+  id           String              @id @default(uuid())
+  mode         SessionMode
+  phase        SessionPhase        @default(waiting)
+  hostId       String
+  keywords     String[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  expiresAt    DateTime?
+
+  participants Participant[]
+  candidates   RestaurantCandidate[]
+  votes        Vote[]
+
+  @@map("sessions")
+}
+
+// 参加者
+model Participant {
+  id        String   @id @default(uuid())
+  sessionId String
+  name      String
+  isHost    Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  votes     Vote[]
+
+  @@map("participants")
+}
+
+// 飲食店候補
+model RestaurantCandidate {
+  id           String   @id @default(uuid())
+  sessionId    String
+  placeId      String   // Google Places API の place_id
+  name         String
+  address      String
+  rating       Float
+  reviewCount  Int
+  priceLevel   Int?
+  photos       String[] // 画像URLの配列
+  lat          Float
+  lng          Float
+  websiteUrl   String?
+  googleMapsUrl String
+  createdAt    DateTime @default(now())
+
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  votes        Vote[]
+
+  @@unique([sessionId, placeId])
+  @@map("restaurant_candidates")
+}
+
+// 投票
+model Vote {
+  id           String     @id @default(uuid())
+  sessionId    String
+  participantId String
+  candidateId  String
+  choice       VoteChoice
+  createdAt    DateTime   @default(now())
+
+  session      Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participant  Participant         @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  candidate    RestaurantCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, candidateId])
+  @@map("votes")
+}
+
+// Enums
+enum SessionMode {
+  solo
+  multi
+}
+
+enum SessionPhase {
+  waiting
+  keyword
+  voting
+  result
+}
+
+enum VoteChoice {
+  keep
+  reject
+}
