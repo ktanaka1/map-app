@@ -102,53 +102,82 @@ function RestaurantCard({
   restaurant: Restaurant;
   highlight?: boolean;
 }) {
+  const allPhotos = restaurant.photos.filter(Boolean);
+  const heroPhoto = allPhotos[0] ?? null;
+  const stripPhotos = allPhotos.slice(1);
+
   return (
     <div style={{ ...cardStyles.card, ...(highlight ? cardStyles.highlight : {}) }}>
-      {highlight && (
-        <div style={cardStyles.highlightBadge}>おすすめ</div>
+      {heroPhoto && (
+        <img
+          src={heroPhoto}
+          alt={restaurant.name}
+          style={cardStyles.heroPhoto}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
       )}
 
-      <h3 style={cardStyles.name}>{restaurant.name}</h3>
-      <p style={cardStyles.address}>{restaurant.address}</p>
+      <div style={cardStyles.cardBody}>
+        {highlight && (
+          <div style={cardStyles.highlightBadge}>おすすめ</div>
+        )}
 
-      <div style={cardStyles.ratingRow}>
-        <span style={cardStyles.stars}>
-          {'★'.repeat(Math.round(restaurant.rating))}
-          {'☆'.repeat(5 - Math.round(restaurant.rating))}
-        </span>
-        <span style={cardStyles.ratingValue}>
-          {restaurant.rating.toFixed(1)}
-        </span>
-        <span style={cardStyles.reviewCount}>
-          （{restaurant.reviewCount}件）
-        </span>
-      </div>
+        <h3 style={cardStyles.name}>{restaurant.name}</h3>
+        <p style={cardStyles.address}>{restaurant.address}</p>
 
-      {restaurant.priceLevel !== null && (
-        <p style={cardStyles.price}>
-          価格帯: {'¥'.repeat(restaurant.priceLevel + 1)}
-        </p>
-      )}
+        <div style={cardStyles.ratingRow}>
+          <span style={cardStyles.stars}>
+            {'★'.repeat(Math.round(restaurant.rating))}
+            {'☆'.repeat(5 - Math.round(restaurant.rating))}
+          </span>
+          <span style={cardStyles.ratingValue}>
+            {restaurant.rating.toFixed(1)}
+          </span>
+          <span style={cardStyles.reviewCount}>
+            （{restaurant.reviewCount}件）
+          </span>
+        </div>
 
-      <div style={cardStyles.actions}>
-        <a
-          href={restaurant.googleMapsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={cardStyles.mapsLink}
-        >
-          Google マップで見る
-        </a>
-        {restaurant.websiteUrl && (
+        {restaurant.priceLevel !== null && (
+          <p style={cardStyles.price}>
+            価格帯: {'¥'.repeat(restaurant.priceLevel + 1)}
+          </p>
+        )}
+
+        {stripPhotos.length > 0 && (
+          <div style={cardStyles.photoStrip}>
+            {stripPhotos.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`${restaurant.name} ${i + 2}`}
+                style={cardStyles.photoThumb}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ))}
+          </div>
+        )}
+
+        <div style={cardStyles.actions}>
           <a
-            href={restaurant.websiteUrl}
+            href={restaurant.googleMapsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            style={cardStyles.websiteLink}
+            style={cardStyles.mapsLink}
           >
-            公式サイト
+            Google マップで見る
           </a>
-        )}
+          {restaurant.websiteUrl && (
+            <a
+              href={restaurant.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={cardStyles.websiteLink}
+            >
+              公式サイト
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -300,13 +329,37 @@ const cardStyles: Record<string, React.CSSProperties> = {
   card: {
     backgroundColor: '#fff',
     borderRadius: '16px',
-    padding: '20px 24px',
+    overflow: 'hidden',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     position: 'relative',
   },
   highlight: {
     border: '2px solid #f6ad55',
     boxShadow: '0 4px 16px rgba(246,173,85,0.25)',
+  },
+  heroPhoto: {
+    width: '100%',
+    height: '200px',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  cardBody: {
+    padding: '20px 24px',
+  },
+  photoStrip: {
+    display: 'flex',
+    gap: '4px',
+    overflowX: 'auto',
+    marginTop: '14px',
+    scrollbarWidth: 'none' as const,
+  },
+  photoThumb: {
+    flexShrink: 0,
+    width: '100px',
+    height: '100px',
+    objectFit: 'cover',
+    borderRadius: '6px',
+    display: 'block',
   },
   highlightBadge: {
     display: 'inline-block',

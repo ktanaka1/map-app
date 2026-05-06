@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm ci && npm run build --workspace=client",
+  "buildCommand": "npm run build --workspace=client",
   "outputDirectory": "client/dist",
   "installCommand": "npm ci",
   "framework": null,
