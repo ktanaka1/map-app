@@ -96,6 +96,11 @@ export interface ServerToClientEvents {
     code: string;
     message: string;
   }) => void;
+
+  /** 検索結果の飲食店一覧 */
+  restaurants_found: (payload: {
+    restaurants: import('./restaurant').Restaurant[];
+  }) => void;
 }
 
 // クライアント → サーバー へ送信するイベント
@@ -161,6 +166,15 @@ export interface ClientToServerEvents {
     },
     callback: (response: RejoinSessionResponse) => void
   ) => void;
+
+  /** セッションを作成する（ホストのみ） */
+  create_session: (
+    payload: {
+      mode: SessionMode;
+      hostName: string;
+    },
+    callback: (response: CreateSessionResponse) => void
+  ) => void;
 }
 
 // ========================================
@@ -197,4 +211,10 @@ export interface RejoinSessionResponse extends BaseResponse {
   session?: Session;
   participant?: Participant;
   restaurants?: Restaurant[];
+}
+
+export interface CreateSessionResponse extends BaseResponse {
+  sessionId?: string;
+  session?: Session;
+  participant?: Participant;
 }

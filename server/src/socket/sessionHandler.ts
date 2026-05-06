@@ -30,17 +30,9 @@ type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
  */
 export function registerSessionHandlers(io: AppServer, socket: AppSocket): void {
   /**
-   * セッション作成（TopPageから呼ばれる独自イベント）
-   * shared/types の ClientToServerEvents には含まれないため、
-   * socket.on の型を any で拡張して受け取る
+   * セッション作成
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (socket as any).on(
-    'create_session',
-    (
-      payload: { mode: 'solo' | 'multi'; hostName: string },
-      callback: (res: { success: boolean; sessionId?: string; error?: string }) => void
-    ) => {
+  socket.on('create_session', (payload, callback) => {
       try {
         const { mode, hostName } = payload;
         if (!hostName?.trim()) {
@@ -55,7 +47,7 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
         socket.join(session.id);
         console.log(`[Socket] create_session: id=${session.id}, mode=${mode}, host=${hostName}`);
 
-        callback({ success: true, sessionId: session.id, participant: host, session } as Parameters<typeof callback>[0]);
+        callback({ success: true, sessionId: session.id, participant: host, session });
 
         // 作成者自身に session_phase_changed を送信してフェーズを伝える
         socket.emit('session_phase_changed', { phase: session.phase, session });
@@ -264,10 +256,7 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
       console.log(`[Socket] start_search: session=${sessionId}, restaurants=${restaurants.length}件`);
 
       // 全員にレストラン一覧とフェーズ変更を通知
-      // restaurants_found は shared/types に定義されていないため独自イベントとして送信
-      (io.to(sessionId) as unknown as {
-        emit(event: string, ...args: unknown[]): void;
-      }).emit('restaurants_found', { restaurants });
+      io.to(sessionId).emit('restaurants_found', { restaurants });
 
       io.to(sessionId).emit('session_phase_changed', {
         phase: 'voting',

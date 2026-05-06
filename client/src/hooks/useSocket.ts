@@ -268,7 +268,6 @@ export function useSocket(): UseSocketReturn {
       window.location.replace(`/?ended=${encodeURIComponent(msg)}`);
     };
 
-    // restaurants_found は shared/types 外の独自イベント
     const onRestaurantsFound = (payload: { restaurants: Restaurant[] }) => {
       updateState({ restaurants: payload.restaurants });
     };
@@ -284,10 +283,7 @@ export function useSocket(): UseSocketReturn {
     socket.on('vote_submitted', onVoteSubmitted);
     socket.on('voting_completed', onVotingCompleted);
     socket.on('session_ended', onSessionEnded);
-    (socket as unknown as { on(event: string, handler: (payload: { restaurants: Restaurant[] }) => void): void }).on(
-      'restaurants_found',
-      onRestaurantsFound
-    );
+    socket.on('restaurants_found', onRestaurantsFound);
 
     return () => {
       socket.off('connect', onConnect);
@@ -301,10 +297,7 @@ export function useSocket(): UseSocketReturn {
       socket.off('vote_submitted', onVoteSubmitted);
       socket.off('voting_completed', onVotingCompleted);
       socket.off('session_ended', onSessionEnded);
-      (socket as unknown as { off(event: string, handler: (payload: { restaurants: Restaurant[] }) => void): void }).off(
-        'restaurants_found',
-        onRestaurantsFound
-      );
+      socket.off('restaurants_found', onRestaurantsFound);
     };
   }, [updateState]);
 
@@ -314,21 +307,19 @@ export function useSocket(): UseSocketReturn {
       hostName: string,
       callback: (res: { success: boolean; sessionId?: string; participant?: Participant; session?: Session; error?: string }) => void
     ) => {
-      (socketRef.current as unknown as {
-        emit(event: string, payload: unknown, cb: (res: { success: boolean; sessionId?: string; participant?: Participant; session?: Session; error?: string }) => void): void;
-      }).emit('create_session', { mode, hostName }, (res) => {
+      socketRef.current.emit('create_session', { mode, hostName }, (res) => {
         if (res.success && res.participant && res.session) {
           setState({
             ...initialState,
-            session: res.session!,
-            me: res.participant!,
-            participants: res.session!.participants,
+            session: res.session,
+            me: res.participant,
+            participants: res.session.participants,
           });
           saveSessionToStorage({
-            sessionId: res.session!.id,
-            participantId: res.participant!.id,
-            participantName: res.participant!.name,
-            isHost: res.participant!.isHost,
+            sessionId: res.session.id,
+            participantId: res.participant.id,
+            participantName: res.participant.name,
+            isHost: res.participant.isHost,
           });
         }
         callback(res);
