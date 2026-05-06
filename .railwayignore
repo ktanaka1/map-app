@@ -1,0 +1,6 @@
+# .gitignore の dist 除外を上書きして server/dist をアップロード対象にする
+!server/dist/
+node_modules/
+client/dist/
+.env
+.env.*

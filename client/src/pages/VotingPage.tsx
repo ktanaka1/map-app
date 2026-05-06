@@ -17,6 +17,10 @@ function VotingPage() {
   const currentRestaurant = restaurants.find((r) => !votedRestaurantIds.has(r.id)) ?? null;
   const votedCount = votedRestaurantIds.size;
 
+  const allPhotos = currentRestaurant?.photos.filter(Boolean) ?? [];
+  const heroPhoto = allPhotos[0] ?? null;
+  const stripPhotos = allPhotos.slice(1);
+
   // フェーズが変わったらリダイレクト
   useEffect(() => {
     if (session?.phase === 'result') {
@@ -115,31 +119,80 @@ function VotingPage() {
         ) : (
           /* 店舗カード */
           <div style={styles.restaurantCard}>
-            <div style={styles.cardMeta}>
-              <span style={styles.cardIndex}>
-                {votedCount + 1} / {restaurants.length}
-              </span>
-              {currentRestaurant.priceLevel !== null && (
-                <span style={styles.priceTag}>
-                  {'¥'.repeat(currentRestaurant.priceLevel + 1)}
+            {/* トップ写真 */}
+            {heroPhoto && (
+              <img
+                src={heroPhoto}
+                alt={currentRestaurant.name}
+                style={styles.heroPhoto}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+
+            <div style={styles.cardBody}>
+              <div style={styles.cardMeta}>
+                <span style={styles.cardIndex}>
+                  {votedCount + 1} / {restaurants.length}
                 </span>
+                {currentRestaurant.priceLevel !== null && (
+                  <span style={styles.priceTag}>
+                    {'¥'.repeat(currentRestaurant.priceLevel + 1)}
+                  </span>
+                )}
+              </div>
+
+              <h3 style={styles.restaurantName}>{currentRestaurant.name}</h3>
+              <p style={styles.restaurantAddress}>{currentRestaurant.address}</p>
+
+              <div style={styles.ratingRow}>
+                <span style={styles.stars}>
+                  {'★'.repeat(Math.round(currentRestaurant.rating))}
+                  {'☆'.repeat(5 - Math.round(currentRestaurant.rating))}
+                </span>
+                <span style={styles.ratingValue}>
+                  {currentRestaurant.rating.toFixed(1)}
+                </span>
+                <span style={styles.reviewCount}>
+                  （{currentRestaurant.reviewCount}件のレビュー）
+                </span>
+              </div>
+
+              {/* 投稿写真（横スクロール、2枚目以降） */}
+              {stripPhotos.length > 0 && (
+                <div style={styles.photoStrip}>
+                  {stripPhotos.map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`${currentRestaurant.name} ${i + 2}`}
+                      style={styles.photoThumb}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ))}
+                </div>
               )}
-            </div>
 
-            <h3 style={styles.restaurantName}>{currentRestaurant.name}</h3>
-            <p style={styles.restaurantAddress}>{currentRestaurant.address}</p>
-
-            <div style={styles.ratingRow}>
-              <span style={styles.stars}>
-                {'★'.repeat(Math.round(currentRestaurant.rating))}
-                {'☆'.repeat(5 - Math.round(currentRestaurant.rating))}
-              </span>
-              <span style={styles.ratingValue}>
-                {currentRestaurant.rating.toFixed(1)}
-              </span>
-              <span style={styles.reviewCount}>
-                （{currentRestaurant.reviewCount}件のレビュー）
-              </span>
+              {/* 外部リンク */}
+              <div style={styles.linkRow}>
+                <a
+                  href={currentRestaurant.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.mapLink}
+                >
+                  Google Maps で見る
+                </a>
+                {currentRestaurant.websiteUrl && (
+                  <a
+                    href={currentRestaurant.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.webLink}
+                  >
+                    公式サイト
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -315,10 +368,34 @@ const styles: Record<string, React.CSSProperties> = {
   restaurantCard: {
     backgroundColor: '#fff',
     borderRadius: '16px',
-    padding: '24px',
+    overflow: 'hidden',
     width: '100%',
     maxWidth: '480px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  },
+  heroPhoto: {
+    width: '100%',
+    height: '200px',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  photoStrip: {
+    display: 'flex',
+    gap: '4px',
+    overflowX: 'auto',
+    marginTop: '14px',
+    scrollbarWidth: 'none' as const,
+  },
+  photoThumb: {
+    flexShrink: 0,
+    width: '100px',
+    height: '100px',
+    objectFit: 'cover',
+    borderRadius: '6px',
+    display: 'block',
+  },
+  cardBody: {
+    padding: '20px',
   },
   cardMeta: {
     display: 'flex',
@@ -370,6 +447,32 @@ const styles: Record<string, React.CSSProperties> = {
   reviewCount: {
     color: '#888',
     fontSize: '0.82rem',
+  },
+  linkRow: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '14px',
+    flexWrap: 'wrap',
+  },
+  mapLink: {
+    display: 'inline-block',
+    padding: '7px 14px',
+    backgroundColor: '#e8f0fe',
+    color: '#1a73e8',
+    borderRadius: '8px',
+    fontSize: '0.82rem',
+    fontWeight: '600',
+    textDecoration: 'none',
+  },
+  webLink: {
+    display: 'inline-block',
+    padding: '7px 14px',
+    backgroundColor: '#f0fdf4',
+    color: '#15803d',
+    borderRadius: '8px',
+    fontSize: '0.82rem',
+    fontWeight: '600',
+    textDecoration: 'none',
   },
   loadingText: {
     color: '#888',
