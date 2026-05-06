@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { SessionMode } from 'shared/types';
 import { useSocketContext } from '../hooks/useSocketContext';
@@ -10,6 +10,16 @@ function TopPage() {
   const [selectedMode, setSelectedMode] = useState<SessionMode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [endedMessage, setEndedMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const msg = params.get('ended');
+    if (msg) {
+      setEndedMessage(decodeURIComponent(msg));
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
 
   const handleSelectMode = (mode: SessionMode) => {
     setSelectedMode(mode);
@@ -99,6 +109,7 @@ function TopPage() {
             </button>
           </div>
 
+          {endedMessage && <p style={styles.ended}>{endedMessage}</p>}
           {error && <p style={styles.error}>{error}</p>}
           {state.error && <p style={styles.error}>{state.error}</p>}
         </div>
@@ -232,6 +243,15 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#fff5f5',
     borderRadius: '8px',
     border: '1px solid #feb2b2',
+  },
+  ended: {
+    color: '#92400e',
+    fontSize: '0.85rem',
+    marginBottom: '0',
+    padding: '10px 14px',
+    backgroundColor: '#fffbeb',
+    borderRadius: '8px',
+    border: '1px solid #fcd34d',
   },
   footer: {
     position: 'sticky',

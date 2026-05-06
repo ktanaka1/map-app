@@ -262,10 +262,10 @@ export function useSocket(): UseSocketReturn {
     const onSessionEnded = (payload: { reason: string }) => {
       console.log('[Socket] session_ended:', payload.reason);
       clearSessionFromStorage();
-      updateState({
-        error: `セッションが終了しました（理由: ${payload.reason}）`,
-        session: null,
-      });
+      const reason = payload.reason === 'host_left' ? 'ホストが退室したため' :
+                     payload.reason === 'participant_left' ? '参加者が退室したため' : '';
+      const msg = reason ? `セッションが終了しました（${reason}）` : 'セッションが終了しました';
+      window.location.replace(`/?ended=${encodeURIComponent(msg)}`);
     };
 
     // restaurants_found は shared/types 外の独自イベント
