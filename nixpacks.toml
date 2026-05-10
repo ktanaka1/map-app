@@ -2,4 +2,4 @@
 cmds = ["npm run build"]
 
 [start]
-cmd = "node server/dist/index.js"
+cmd = "npm run build --workspace=server && cd server && npx prisma generate && npx prisma db push --accept-data-loss && node dist/index.js"
