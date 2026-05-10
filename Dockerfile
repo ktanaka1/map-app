@@ -7,4 +7,4 @@ RUN npm ci
 RUN cd server && npx prisma generate
 RUN npm run build --workspace=server
 
-CMD cd server && npx prisma db push --accept-data-loss && node dist/index.js
+CMD cd server && npx prisma db push --accept-data-loss && node dist/server/src/index.js
