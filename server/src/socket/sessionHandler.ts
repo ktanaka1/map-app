@@ -216,7 +216,7 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
    * API 失敗時はダミーデータにフォールバックして処理を継続する。
    */
   socket.on('start_search', async (payload, callback) => {
-    const { sessionId, location, radius } = payload;
+    const { sessionId, location, radius, maxPriceLevel } = payload;
     try {
       const entry = getSession(sessionId);
       if (!entry) {
@@ -237,7 +237,8 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
           entry.session.keywords,
           location.lat,
           location.lng,
-          radius
+          radius,
+          maxPriceLevel ?? null
         );
         console.log(`[Socket] start_search: Places API で ${restaurants.length} 件取得`);
       } catch (apiErr) {

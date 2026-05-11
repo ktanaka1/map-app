@@ -88,7 +88,8 @@ export interface UseSocketReturn {
     sessionId: string,
     location: { lat: number; lng: number },
     radius: number,
-    callback: (res: { success: boolean; error?: string }) => void
+    callback: (res: { success: boolean; error?: string }) => void,
+    maxPriceLevel?: number | null
   ) => void;
   submitVote: (
     sessionId: string,
@@ -385,9 +386,10 @@ export function useSocket(): UseSocketReturn {
       sessionId: string,
       location: { lat: number; lng: number },
       radius: number,
-      callback: (res: { success: boolean; error?: string }) => void
+      callback: (res: { success: boolean; error?: string }) => void,
+      maxPriceLevel: number | null = null
     ) => {
-      socketRef.current.emit('start_search', { sessionId, location, radius }, callback);
+      socketRef.current.emit('start_search', { sessionId, location, radius, maxPriceLevel }, callback);
     },
     []
   );

@@ -4,11 +4,18 @@ import { useSocketContext } from '../hooks/useSocketContext';
 import { geocodeAddress } from '../services/geocodingService';
 import RejoiningOverlay from '../components/RejoiningOverlay';
 
-// 半径の選択肢
 const RADIUS_OPTIONS: { label: string; value: number }[] = [
   { label: '500m', value: 500 },
   { label: '1km', value: 1000 },
   { label: '2km', value: 2000 },
+];
+
+const PRICE_OPTIONS: { label: string; value: number | null }[] = [
+  { label: '指定なし', value: null },
+  { label: '¥', value: 1 },
+  { label: '¥¥', value: 2 },
+  { label: '¥¥¥', value: 3 },
+  { label: '¥¥¥¥', value: 4 },
 ];
 
 type GpsStatus = 'acquiring' | 'ok' | 'denied' | 'error';
@@ -33,8 +40,8 @@ function KeywordPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
 
-  // 半径選択
   const [radius, setRadius] = useState<number>(500);
+  const [maxPriceLevel, setMaxPriceLevel] = useState<number | null>(null);
 
   const keywords = session?.keywords ?? [];
   const isHost = state.me?.id === session?.hostId || state.me?.isHost;
@@ -128,7 +135,7 @@ function KeywordPage() {
       if (!res.success) {
         setError(res.error ?? '検索に失敗しました');
       }
-    });
+    }, maxPriceLevel);
   };
 
   // GPS取得中 or 手動入力で座標未確定の間は検索ボタンを無効化
@@ -213,26 +220,47 @@ function KeywordPage() {
             </div>
           )}
 
-          {/* 半径選択（ホストのみ） */}
+          {/* 半径・予算選択（ホストのみ） */}
           {isHost && (
-            <div style={styles.radiusSection}>
-              <p style={styles.sectionLabel}>検索範囲</p>
-              <div style={styles.radiusButtons}>
-                {RADIUS_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setRadius(opt.value)}
-                    style={{
-                      ...styles.radiusButton,
-                      ...(radius === opt.value ? styles.radiusButtonActive : {}),
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            <>
+              <div style={styles.radiusSection}>
+                <p style={styles.sectionLabel}>検索範囲</p>
+                <div style={styles.radiusButtons}>
+                  {RADIUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setRadius(opt.value)}
+                      style={{
+                        ...styles.radiusButton,
+                        ...(radius === opt.value ? styles.radiusButtonActive : {}),
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+
+              <div style={styles.radiusSection}>
+                <p style={styles.sectionLabel}>予算（上限）</p>
+                <div style={styles.radiusButtons}>
+                  {PRICE_OPTIONS.map((opt) => (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      onClick={() => setMaxPriceLevel(opt.value)}
+                      style={{
+                        ...styles.radiusButton,
+                        ...(maxPriceLevel === opt.value ? styles.radiusButtonActive : {}),
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {/* キーワード入力 */}

@@ -103,6 +103,7 @@ export interface ClientToServerEvents {
             lng: number;
         };
         radius: number;
+        maxPriceLevel: number | null;
     }, callback: (response: BaseResponse) => void) => void;
     /** 投票を送信する */
     submit_vote: (payload: {

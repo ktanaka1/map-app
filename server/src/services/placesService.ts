@@ -93,7 +93,8 @@ async function searchNearby(
   lat: number,
   lng: number,
   radiusMeters: number = 500,
-  maxResults: number = 10
+  maxResults: number = 10,
+  maxPriceLevel: number | null = null
 ): Promise<Restaurant[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY が設定されていません');
@@ -109,6 +110,7 @@ async function searchNearby(
         maxresults: maxResults,
         language: 'ja',
         key: apiKey,
+        ...(maxPriceLevel !== null && { maxprice: maxPriceLevel }),
       },
     }
   );
@@ -125,7 +127,8 @@ async function searchByText(
   lat: number,
   lng: number,
   radiusMeters: number = 500,
-  maxResults: number = 10
+  maxResults: number = 10,
+  maxPriceLevel: number | null = null
 ): Promise<Restaurant[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY が設定されていません');
@@ -141,6 +144,7 @@ async function searchByText(
         radius: radiusMeters,
         language: 'ja',
         key: apiKey,
+        ...(maxPriceLevel !== null && { maxprice: maxPriceLevel }),
       },
     }
   );
@@ -156,18 +160,19 @@ export async function searchRestaurants(
   keywords: string[],
   lat: number,
   lng: number,
-  radiusMeters: number = 500
+  radiusMeters: number = 500,
+  maxPriceLevel: number | null = null
 ): Promise<Restaurant[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? '';
 
   let restaurants: Restaurant[];
   if (keywords.length > 0) {
     const textQuery = keywords.join(' ');
-    console.log(`[PlacesService] Text Search: query="${textQuery}", lat=${lat}, lng=${lng}, radius=${radiusMeters}m`);
-    restaurants = await searchByText(textQuery, lat, lng, radiusMeters);
+    console.log(`[PlacesService] Text Search: query="${textQuery}", lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`);
+    restaurants = await searchByText(textQuery, lat, lng, radiusMeters, 10, maxPriceLevel);
   } else {
-    console.log(`[PlacesService] Nearby Search: lat=${lat}, lng=${lng}, radius=${radiusMeters}m`);
-    restaurants = await searchNearby(lat, lng, radiusMeters);
+    console.log(`[PlacesService] Nearby Search: lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`);
+    restaurants = await searchNearby(lat, lng, radiusMeters, 10, maxPriceLevel);
   }
 
   // Place Details で写真を補完（並列）
