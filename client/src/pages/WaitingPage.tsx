@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useSocketContext } from '../hooks/useSocketContext';
+import { clearSessionFromStorage } from '../hooks/useSocket';
 import RejoiningOverlay from '../components/RejoiningOverlay';
 
 function WaitingPage() {
@@ -39,11 +40,21 @@ function WaitingPage() {
     });
   };
 
+  const handleBack = () => {
+    clearSessionFromStorage();
+    navigate('/');
+  };
+
   return (
     <div style={styles.pageWrapper}>
       {/* スクロール可能なコンテンツ領域 */}
       <div style={styles.scrollArea}>
         <div style={styles.headerSection}>
+          {isHost && (
+            <button type="button" onClick={handleBack} style={styles.backButton}>
+              ← 戻る
+            </button>
+          )}
           <h2 style={styles.heading}>参加者を待っています</h2>
           <p style={styles.sessionId}>
             セッションID: <strong>{sessionId}</strong>
@@ -145,6 +156,20 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     width: '100%',
     maxWidth: '480px',
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    color: '#4a90e2',
+    fontSize: '0.9rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    padding: '4px 0',
   },
   heading: {
     fontSize: '1.5rem',
