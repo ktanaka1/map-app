@@ -12,10 +12,10 @@ const RADIUS_OPTIONS: { label: string; value: number }[] = [
 
 const PRICE_OPTIONS: { label: string; value: number | null }[] = [
   { label: '指定なし', value: null },
-  { label: '¥', value: 1 },
-  { label: '¥¥', value: 2 },
-  { label: '¥¥¥', value: 3 },
-  { label: '¥¥¥¥', value: 4 },
+  { label: '~1,000円', value: 1 },
+  { label: '~2,000円', value: 2 },
+  { label: '~5,000円', value: 3 },
+  { label: '5,000円~', value: 4 },
 ];
 
 type GpsStatus = 'acquiring' | 'ok' | 'denied' | 'error';
