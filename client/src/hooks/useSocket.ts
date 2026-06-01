@@ -63,6 +63,8 @@ export interface SessionState {
   votedRestaurantIds: Set<string>;
   /** 各レストランへの投票完了数 restaurantId -> completedCount */
   voteProgress: Map<string, number>;
+  /** 参加者ごとの累計投票数 participantId -> voteCount */
+  participantVoteCounts: Map<string, number>;
   error: string | null;
 }
 
@@ -112,6 +114,7 @@ const initialState: SessionState = {
   votingResult: null,
   votedRestaurantIds: new Set(),
   voteProgress: new Map(),
+  participantVoteCounts: new Map(),
   error: null,
 };
 
@@ -252,7 +255,12 @@ export function useSocket(): UseSocketReturn {
       setState((prev) => {
         const newProgress = new Map(prev.voteProgress);
         newProgress.set(payload.restaurantId, payload.completedCount);
-        return { ...prev, voteProgress: newProgress };
+        const newParticipantCounts = new Map(prev.participantVoteCounts);
+        newParticipantCounts.set(
+          payload.participantId,
+          (newParticipantCounts.get(payload.participantId) ?? 0) + 1
+        );
+        return { ...prev, voteProgress: newProgress, participantVoteCounts: newParticipantCounts };
       });
     };
 

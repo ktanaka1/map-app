@@ -241,6 +241,10 @@ export function registerSessionHandlers(io: AppServer, socket: AppSocket): void 
           maxPriceLevel ?? null
         );
         console.log(`[Socket] start_search: Places API で ${restaurants.length} 件取得`);
+        if (restaurants.length === 0) {
+          callback({ success: false, error: '条件に一致するお店が見つかりませんでした。キーワードや場所を変えて再度お試しください。' });
+          return;
+        }
       } catch (apiErr) {
         console.error('[Socket] start_search: Places API 失敗。ダミーデータにフォールバック:', (apiErr as Error).message);
         restaurants = generateDummyRestaurants(entry.session.keywords);

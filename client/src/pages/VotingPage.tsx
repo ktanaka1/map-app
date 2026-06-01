@@ -8,7 +8,7 @@ function VotingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { state, submitVote, isRejoining } = useSocketContext();
-  const { session, restaurants, votedRestaurantIds, voteProgress } = state;
+  const { session, restaurants, votedRestaurantIds, participantVoteCounts } = state;
 
   const participants = session?.participants ?? [];
   const totalParticipants = participants.length;
@@ -88,17 +88,17 @@ function VotingPage() {
             <p style={styles.progressTitle}>参加者の進捗</p>
             <div style={styles.progressList}>
               {participants.map((p) => {
-                const completedForCurrent = currentRestaurant
-                  ? (voteProgress.get(currentRestaurant.id) ?? 0)
-                  : 0;
                 const isMe = p.id === state.me?.id;
+                const count = isMe
+                  ? votedCount
+                  : (participantVoteCounts.get(p.id) ?? 0);
                 return (
                   <div key={p.id} style={styles.progressItem}>
                     <span style={styles.progressName}>
                       {p.name}{isMe ? '（あなた）' : ''}
                     </span>
                     <span style={styles.progressVotes}>
-                      {isMe ? `${votedCount}票` : `${completedForCurrent}票`}
+                      {count}票
                     </span>
                   </div>
                 );
