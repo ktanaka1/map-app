@@ -1,5 +1,5 @@
-import React, { createContext, useContext } from 'react';
-import { useSocket, type UseSocketReturn } from './useSocket';
+import React, { createContext, useContext } from "react";
+import { useSocket, type UseSocketReturn } from "./useSocket";
 
 const SocketContext = createContext<UseSocketReturn | null>(null);
 
@@ -14,6 +14,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
 export function useSocketContext(): UseSocketReturn {
   const ctx = useContext(SocketContext);
-  if (!ctx) throw new Error('useSocketContext must be used within SocketProvider');
+  if (!ctx)
+    throw new Error("useSocketContext must be used within SocketProvider");
   return ctx;
 }

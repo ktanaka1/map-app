@@ -1,41 +1,44 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useSocketContext } from '../hooks/useSocketContext';
-import { geocodeAddress } from '../services/geocodingService';
-import RejoiningOverlay from '../components/RejoiningOverlay';
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useSocketContext } from "../hooks/useSocketContext";
+import { geocodeAddress } from "../services/geocodingService";
+import RejoiningOverlay from "../components/RejoiningOverlay";
 
 const RADIUS_OPTIONS: { label: string; value: number }[] = [
-  { label: '500m', value: 500 },
-  { label: '1km', value: 1000 },
-  { label: '2km', value: 2000 },
+  { label: "500m", value: 500 },
+  { label: "1km", value: 1000 },
+  { label: "2km", value: 2000 },
 ];
 
 const PRICE_OPTIONS: { label: string; value: number | null }[] = [
-  { label: '指定なし', value: null },
-  { label: '~1,000円', value: 1 },
-  { label: '~2,000円', value: 2 },
-  { label: '~5,000円', value: 3 },
+  { label: "指定なし", value: null },
+  { label: "~1,000円", value: 1 },
+  { label: "~2,000円", value: 2 },
+  { label: "~5,000円", value: 3 },
 ];
 
-type GpsStatus = 'acquiring' | 'ok' | 'denied' | 'error';
+type GpsStatus = "acquiring" | "ok" | "denied" | "error";
 
 function KeywordPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, addKeyword, removeKeyword, startSearch, isRejoining } = useSocketContext();
+  const { state, addKeyword, removeKeyword, startSearch, isRejoining } =
+    useSocketContext();
   const { session } = state;
 
   // キーワード入力
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // GPS / 位置情報
-  const [gpsStatus, setGpsStatus] = useState<GpsStatus>('acquiring');
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>("acquiring");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
 
   // 手動入力フォールバック
-  const [manualAddress, setManualAddress] = useState('');
+  const [manualAddress, setManualAddress] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
 
@@ -53,29 +56,32 @@ function KeywordPage() {
     gpsAttempted.current = true;
 
     if (!navigator.geolocation) {
-      setGpsStatus('error');
+      setGpsStatus("error");
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
-        setGpsStatus('ok');
+        setCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setGpsStatus("ok");
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          setGpsStatus('denied');
+          setGpsStatus("denied");
         } else {
-          setGpsStatus('error');
+          setGpsStatus("error");
         }
       },
-      { timeout: 10000, maximumAge: 60000 }
+      { timeout: 10000, maximumAge: 60000 },
     );
   }, []);
 
   // フェーズが変わったらリダイレクト
   useEffect(() => {
-    if (session?.phase === 'voting') {
+    if (session?.phase === "voting") {
       navigate(`/session/${sessionId}/voting`);
     }
   }, [session?.phase, sessionId, navigate]);
@@ -84,16 +90,16 @@ function KeywordPage() {
     const kw = inputValue.trim();
     if (!kw || !sessionId) return;
     if (keywords.includes(kw)) {
-      setError('すでに追加されています');
+      setError("すでに追加されています");
       return;
     }
 
     addKeyword(sessionId, kw, (res) => {
       if (res.success) {
-        setInputValue('');
+        setInputValue("");
         setError(null);
       } else {
-        setError(res.error ?? 'キーワードの追加に失敗しました');
+        setError(res.error ?? "キーワードの追加に失敗しました");
       }
     });
   };
@@ -102,7 +108,7 @@ function KeywordPage() {
     if (!sessionId) return;
     removeKeyword(sessionId, keyword, (res) => {
       if (!res.success) {
-        setError(res.error ?? 'キーワードの削除に失敗しました');
+        setError(res.error ?? "キーワードの削除に失敗しました");
       }
     });
   };
@@ -118,7 +124,9 @@ function KeywordPage() {
       setCoords(result);
       setGeocodeError(null);
     } catch (err) {
-      setGeocodeError(err instanceof Error ? err.message : '場所の検索に失敗しました');
+      setGeocodeError(
+        err instanceof Error ? err.message : "場所の検索に失敗しました",
+      );
     } finally {
       setIsGeocoding(false);
     }
@@ -129,25 +137,34 @@ function KeywordPage() {
     setIsSearching(true);
     setError(null);
 
-    startSearch(sessionId, coords, radius, (res) => {
-      setIsSearching(false);
-      if (!res.success) {
-        setError(res.error ?? '検索に失敗しました');
-      }
-    }, maxPriceLevel);
+    startSearch(
+      sessionId,
+      coords,
+      radius,
+      (res) => {
+        setIsSearching(false);
+        if (!res.success) {
+          setError(res.error ?? "検索に失敗しました");
+        }
+      },
+      maxPriceLevel,
+    );
   };
 
   // GPS取得中 or 手動入力で座標未確定の間は検索ボタンを無効化
   const isLocationReady = coords !== null;
-  const needsManualInput = gpsStatus === 'denied' || gpsStatus === 'error';
+  const needsManualInput = gpsStatus === "denied" || gpsStatus === "error";
   const isSearchButtonDisabled =
-    keywords.length === 0 || isSearching || !isLocationReady || gpsStatus === 'acquiring';
+    keywords.length === 0 ||
+    isSearching ||
+    !isLocationReady ||
+    gpsStatus === "acquiring";
 
   const searchButtonLabel = isSearching
-    ? '検索中...'
-    : gpsStatus === 'acquiring'
-    ? '現在地を取得中...'
-    : 'このキーワードで探す';
+    ? "検索中..."
+    : gpsStatus === "acquiring"
+      ? "現在地を取得中..."
+      : "このキーワードで探す";
 
   if (isRejoining) return <RejoiningOverlay />;
 
@@ -159,31 +176,32 @@ function KeywordPage() {
           <h2 style={styles.heading}>キーワードを入力</h2>
           {session && (
             <p style={styles.participants}>
-              参加者: {session.participants.map((p) => p.name).join('、')}
+              参加者: {session.participants.map((p) => p.name).join("、")}
             </p>
           )}
         </div>
 
         <div style={styles.card}>
           {/* GPS状態バナー */}
-          {gpsStatus === 'acquiring' && (
+          {gpsStatus === "acquiring" && (
             <div style={{ ...styles.banner, ...styles.bannerInfo }}>
               現在地を取得中...
             </div>
           )}
 
-          {gpsStatus === 'ok' && coords && (
+          {gpsStatus === "ok" && coords && (
             <div style={{ ...styles.banner, ...styles.bannerSuccess }}>
-              現在地を取得しました（{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}）
+              現在地を取得しました（{coords.lat.toFixed(4)},{" "}
+              {coords.lng.toFixed(4)}）
             </div>
           )}
 
           {needsManualInput && (
             <div style={styles.manualSection}>
               <div style={{ ...styles.banner, ...styles.bannerWarning }}>
-                {gpsStatus === 'denied'
-                  ? '位置情報の取得が拒否されました。場所をテキストで入力してください。'
-                  : '位置情報の取得に失敗しました。場所をテキストで入力してください。'}
+                {gpsStatus === "denied"
+                  ? "位置情報の取得が拒否されました。場所をテキストで入力してください。"
+                  : "位置情報の取得に失敗しました。場所をテキストで入力してください。"}
               </div>
 
               <div style={styles.inputRow}>
@@ -191,7 +209,7 @@ function KeywordPage() {
                   type="text"
                   value={manualAddress}
                   onChange={(e) => setManualAddress(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGeocodeManual()}
+                  onKeyDown={(e) => e.key === "Enter" && handleGeocodeManual()}
                   placeholder="例: 渋谷、新宿駅、東京タワー付近"
                   style={styles.input}
                   disabled={isGeocoding}
@@ -202,10 +220,12 @@ function KeywordPage() {
                   disabled={!manualAddress.trim() || isGeocoding}
                   style={{
                     ...styles.addButton,
-                    ...(!manualAddress.trim() || isGeocoding ? styles.addButtonDisabled : {}),
+                    ...(!manualAddress.trim() || isGeocoding
+                      ? styles.addButtonDisabled
+                      : {}),
                   }}
                 >
-                  {isGeocoding ? '検索中' : '決定'}
+                  {isGeocoding ? "検索中" : "決定"}
                 </button>
               </div>
 
@@ -213,7 +233,8 @@ function KeywordPage() {
 
               {coords && (
                 <div style={{ ...styles.banner, ...styles.bannerSuccess }}>
-                  場所を確定しました（{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}）
+                  場所を確定しました（{coords.lat.toFixed(4)},{" "}
+                  {coords.lng.toFixed(4)}）
                 </div>
               )}
             </div>
@@ -232,7 +253,9 @@ function KeywordPage() {
                       onClick={() => setRadius(opt.value)}
                       style={{
                         ...styles.radiusButton,
-                        ...(radius === opt.value ? styles.radiusButtonActive : {}),
+                        ...(radius === opt.value
+                          ? styles.radiusButtonActive
+                          : {}),
                       }}
                     >
                       {opt.label}
@@ -251,7 +274,9 @@ function KeywordPage() {
                       onClick={() => setMaxPriceLevel(opt.value)}
                       style={{
                         ...styles.radiusButton,
-                        ...(maxPriceLevel === opt.value ? styles.radiusButtonActive : {}),
+                        ...(maxPriceLevel === opt.value
+                          ? styles.radiusButtonActive
+                          : {}),
                       }}
                     >
                       {opt.label}
@@ -269,7 +294,7 @@ function KeywordPage() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddKeyword()}
+              onKeyDown={(e) => e.key === "Enter" && handleAddKeyword()}
               placeholder="例: 焼肉、個室、コスパよし"
               style={styles.input}
               maxLength={30}
@@ -310,7 +335,9 @@ function KeywordPage() {
           )}
 
           {!isHost && (
-            <p style={styles.waitingMessage}>ホストが検索を開始するまでお待ちください...</p>
+            <p style={styles.waitingMessage}>
+              ホストが検索を開始するまでお待ちください...
+            </p>
           )}
         </div>
       </div>
@@ -339,209 +366,209 @@ function KeywordPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#f5f5f5',
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "#f5f5f5",
   },
   scrollArea: {
     flex: 1,
-    overflowY: 'auto',
-    padding: '24px 16px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '16px',
+    overflowY: "auto",
+    padding: "24px 16px 16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "16px",
   },
   headerSection: {
-    textAlign: 'center',
-    width: '100%',
-    maxWidth: '480px',
+    textAlign: "center",
+    width: "100%",
+    maxWidth: "480px",
   },
   heading: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    margin: '0 0 6px',
-    color: '#1a1a1a',
+    fontSize: "1.5rem",
+    fontWeight: "bold",
+    margin: "0 0 6px",
+    color: "#1a1a1a",
   },
   participants: {
-    color: '#666',
-    fontSize: '0.85rem',
+    color: "#666",
+    fontSize: "0.85rem",
     margin: 0,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: '16px',
-    padding: '24px',
-    width: '100%',
-    maxWidth: '480px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    backgroundColor: "#fff",
+    borderRadius: "16px",
+    padding: "24px",
+    width: "100%",
+    maxWidth: "480px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
   },
   sectionLabel: {
-    fontSize: '0.88rem',
-    fontWeight: 'bold',
-    color: '#444',
-    margin: '0 0 10px',
+    fontSize: "0.88rem",
+    fontWeight: "bold",
+    color: "#444",
+    margin: "0 0 10px",
   },
   banner: {
-    padding: '10px 14px',
-    borderRadius: '8px',
-    fontSize: '0.85rem',
-    marginBottom: '16px',
-    lineHeight: '1.5',
+    padding: "10px 14px",
+    borderRadius: "8px",
+    fontSize: "0.85rem",
+    marginBottom: "16px",
+    lineHeight: "1.5",
   },
   bannerInfo: {
-    backgroundColor: '#eff6ff',
-    color: '#1d4ed8',
-    border: '1px solid #bfdbfe',
+    backgroundColor: "#eff6ff",
+    color: "#1d4ed8",
+    border: "1px solid #bfdbfe",
   },
   bannerSuccess: {
-    backgroundColor: '#f0fdf4',
-    color: '#15803d',
-    border: '1px solid #bbf7d0',
+    backgroundColor: "#f0fdf4",
+    color: "#15803d",
+    border: "1px solid #bbf7d0",
   },
   bannerWarning: {
-    backgroundColor: '#fffbeb',
-    color: '#92400e',
-    border: '1px solid #fde68a',
+    backgroundColor: "#fffbeb",
+    color: "#92400e",
+    border: "1px solid #fde68a",
   },
   manualSection: {
-    marginBottom: '20px',
+    marginBottom: "20px",
   },
   radiusSection: {
-    marginBottom: '24px',
+    marginBottom: "24px",
   },
   radiusButtons: {
-    display: 'flex',
-    gap: '8px',
+    display: "flex",
+    gap: "8px",
   },
   radiusButton: {
     flex: 1,
-    padding: '12px 0',
-    border: '1.5px solid #ddd',
-    borderRadius: '10px',
-    backgroundColor: '#f9f9f9',
-    color: '#333',
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    fontWeight: '500',
+    padding: "12px 0",
+    border: "1.5px solid #ddd",
+    borderRadius: "10px",
+    backgroundColor: "#f9f9f9",
+    color: "#333",
+    fontSize: "0.9rem",
+    cursor: "pointer",
+    fontWeight: "500",
   },
   radiusButtonActive: {
-    backgroundColor: '#4a90e2',
-    color: '#fff',
-    border: '1.5px solid #4a90e2',
-    fontWeight: 'bold',
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "1.5px solid #4a90e2",
+    fontWeight: "bold",
   },
   inputRow: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '14px',
+    display: "flex",
+    gap: "8px",
+    marginBottom: "14px",
   },
   input: {
     flex: 1,
-    padding: '12px 14px',
-    border: '1.5px solid #ddd',
-    borderRadius: '10px',
-    fontSize: '1rem',
+    padding: "12px 14px",
+    border: "1.5px solid #ddd",
+    borderRadius: "10px",
+    fontSize: "1rem",
     minWidth: 0,
   },
   addButton: {
-    padding: '12px 18px',
-    backgroundColor: '#4a90e2',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '10px',
-    fontSize: '0.9rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    padding: "12px 18px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    fontSize: "0.9rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
     flexShrink: 0,
   },
   addButtonDisabled: {
-    backgroundColor: '#bbb',
-    cursor: 'not-allowed',
+    backgroundColor: "#bbb",
+    cursor: "not-allowed",
   },
   error: {
-    color: '#e53e3e',
-    fontSize: '0.85rem',
-    marginBottom: '12px',
-    padding: '10px 14px',
-    backgroundColor: '#fff5f5',
-    borderRadius: '8px',
-    border: '1px solid #feb2b2',
+    color: "#e53e3e",
+    fontSize: "0.85rem",
+    marginBottom: "12px",
+    padding: "10px 14px",
+    backgroundColor: "#fff5f5",
+    borderRadius: "8px",
+    border: "1px solid #feb2b2",
   },
   empty: {
-    color: '#aaa',
-    fontSize: '0.9rem',
-    textAlign: 'center',
-    padding: '20px 0 4px',
+    color: "#aaa",
+    fontSize: "0.9rem",
+    textAlign: "center",
+    padding: "20px 0 4px",
     margin: 0,
   },
   keywordList: {
-    listStyle: 'none',
+    listStyle: "none",
     padding: 0,
-    margin: '0 0 8px',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
+    margin: "0 0 8px",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
   },
   keywordItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '7px 12px',
-    backgroundColor: '#f0f6ff',
-    border: '1.5px solid #bdd5f7',
-    borderRadius: '20px',
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "7px 12px",
+    backgroundColor: "#f0f6ff",
+    border: "1.5px solid #bdd5f7",
+    borderRadius: "20px",
   },
   keywordText: {
-    fontSize: '0.9rem',
-    color: '#1a5fa8',
-    fontWeight: '500',
+    fontSize: "0.9rem",
+    color: "#1a5fa8",
+    fontWeight: "500",
   },
   removeButton: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#7aaee8',
-    fontSize: '1rem',
-    padding: '0',
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#7aaee8",
+    fontSize: "1rem",
+    padding: "0",
     lineHeight: 1,
-    display: 'flex',
-    alignItems: 'center',
+    display: "flex",
+    alignItems: "center",
   },
   waitingMessage: {
-    color: '#888',
-    fontSize: '0.9rem',
-    textAlign: 'center',
-    margin: '16px 0 0',
+    color: "#888",
+    fontSize: "0.9rem",
+    textAlign: "center",
+    margin: "16px 0 0",
   },
   footer: {
-    position: 'sticky',
+    position: "sticky",
     bottom: 0,
-    backgroundColor: '#fff',
-    borderTop: '1px solid #eee',
-    padding: '12px 16px',
-    paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+    backgroundColor: "#fff",
+    borderTop: "1px solid #eee",
+    padding: "12px 16px",
+    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
   },
   footerInner: {
-    maxWidth: '480px',
-    margin: '0 auto',
+    maxWidth: "480px",
+    margin: "0 auto",
   },
   searchButton: {
-    width: '100%',
-    padding: '18px',
-    backgroundColor: '#f6813d',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
+    width: "100%",
+    padding: "18px",
+    backgroundColor: "#f6813d",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    fontSize: "1.05rem",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
   searchButtonDisabled: {
-    backgroundColor: '#bbb',
-    cursor: 'not-allowed',
+    backgroundColor: "#bbb",
+    cursor: "not-allowed",
   },
 };
 

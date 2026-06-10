@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router } from "express";
 
 export const restaurantRouter = Router();
 
@@ -6,17 +6,17 @@ export const restaurantRouter = Router();
  * GET /api/restaurants/search
  * 場所×キーワードで飲食店を検索する
  */
-restaurantRouter.get('/search', async (_req, res) => {
+restaurantRouter.get("/search", async (_req, res) => {
   // TODO: googlePlacesService.search を呼び出す
-  res.status(501).json({ message: 'Not implemented' });
+  res.status(501).json({ message: "Not implemented" });
 });
 
 /**
  * GET /api/restaurants/:placeId/reviews
  * 飲食店のクチコミを取得する
  */
-restaurantRouter.get('/:placeId/reviews', async (req, res) => {
+restaurantRouter.get("/:placeId/reviews", async (req, res) => {
   // TODO: googlePlacesService.getReviews を呼び出す
   const { placeId } = req.params;
-  res.status(501).json({ message: 'Not implemented', placeId });
+  res.status(501).json({ message: "Not implemented", placeId });
 });

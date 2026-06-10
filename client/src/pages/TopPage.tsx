@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { SessionMode } from 'shared/types';
-import { useSocketContext } from '../hooks/useSocketContext';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import type { SessionMode } from "shared/types";
+import { useSocketContext } from "../hooks/useSocketContext";
 
 function TopPage() {
   const navigate = useNavigate();
   const { createSession, state } = useSocketContext();
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
   const [selectedMode, setSelectedMode] = useState<SessionMode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +14,10 @@ function TopPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const msg = params.get('ended');
+    const msg = params.get("ended");
     if (msg) {
       setEndedMessage(decodeURIComponent(msg));
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({}, "", "/");
     }
   }, []);
 
@@ -28,11 +28,11 @@ function TopPage() {
 
   const handleStart = () => {
     if (!name.trim()) {
-      setError('名前を入力してください');
+      setError("名前を入力してください");
       return;
     }
     if (!selectedMode) {
-      setError('モードを選択してください');
+      setError("モードを選択してください");
       return;
     }
 
@@ -42,12 +42,12 @@ function TopPage() {
     createSession(selectedMode, name.trim(), (res) => {
       setIsLoading(false);
       if (!res.success || !res.sessionId) {
-        setError(res.error ?? 'セッションの作成に失敗しました');
+        setError(res.error ?? "セッションの作成に失敗しました");
         return;
       }
 
       const sessionId = res.sessionId;
-      if (selectedMode === 'solo') {
+      if (selectedMode === "solo") {
         navigate(`/session/${sessionId}/keyword`);
       } else {
         navigate(`/session/${sessionId}/waiting`);
@@ -68,7 +68,9 @@ function TopPage() {
 
         <div style={styles.card}>
           <div style={styles.inputGroup}>
-            <label htmlFor="name" style={styles.label}>あなたの名前</label>
+            <label htmlFor="name" style={styles.label}>
+              あなたの名前
+            </label>
             <input
               id="name"
               type="text"
@@ -77,7 +79,9 @@ function TopPage() {
               placeholder="例: 田中"
               style={styles.input}
               maxLength={20}
-              onKeyDown={(e) => e.key === 'Enter' && selectedMode && handleStart()}
+              onKeyDown={(e) =>
+                e.key === "Enter" && selectedMode && handleStart()
+              }
             />
           </div>
 
@@ -85,10 +89,10 @@ function TopPage() {
           <div style={styles.modeButtons}>
             <button
               type="button"
-              onClick={() => handleSelectMode('solo')}
+              onClick={() => handleSelectMode("solo")}
               style={{
                 ...styles.modeButton,
-                ...(selectedMode === 'solo' ? styles.modeButtonActive : {}),
+                ...(selectedMode === "solo" ? styles.modeButtonActive : {}),
               }}
             >
               <span style={styles.modeIcon}>1</span>
@@ -97,10 +101,10 @@ function TopPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleSelectMode('multi')}
+              onClick={() => handleSelectMode("multi")}
               style={{
                 ...styles.modeButton,
-                ...(selectedMode === 'multi' ? styles.modeButtonActive : {}),
+                ...(selectedMode === "multi" ? styles.modeButtonActive : {}),
               }}
             >
               <span style={styles.modeIcon}>多</span>
@@ -127,7 +131,7 @@ function TopPage() {
               ...(isDisabled ? styles.startButtonDisabled : {}),
             }}
           >
-            {isLoading ? '作成中...' : 'はじめる'}
+            {isLoading ? "作成中..." : "はじめる"}
           </button>
         </div>
       </div>
@@ -137,148 +141,148 @@ function TopPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#f5f5f5',
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "#f5f5f5",
   },
   scrollArea: {
     flex: 1,
-    overflowY: 'auto',
-    padding: '40px 16px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
+    overflowY: "auto",
+    padding: "40px 16px 16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   hero: {
-    textAlign: 'center',
-    marginBottom: '32px',
+    textAlign: "center",
+    marginBottom: "32px",
   },
   appName: {
-    fontSize: '2.8rem',
-    fontWeight: 'bold',
-    margin: '0 0 8px',
-    color: '#1a1a1a',
-    letterSpacing: '-0.5px',
+    fontSize: "2.8rem",
+    fontWeight: "bold",
+    margin: "0 0 8px",
+    color: "#1a1a1a",
+    letterSpacing: "-0.5px",
   },
   tagline: {
-    color: '#666',
-    fontSize: '1rem',
+    color: "#666",
+    fontSize: "1rem",
     margin: 0,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: '16px',
-    padding: '28px 24px',
-    width: '100%',
-    maxWidth: '480px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+    backgroundColor: "#fff",
+    borderRadius: "16px",
+    padding: "28px 24px",
+    width: "100%",
+    maxWidth: "480px",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
   },
   inputGroup: {
-    marginBottom: '28px',
+    marginBottom: "28px",
   },
   label: {
-    display: 'block',
-    fontWeight: 'bold',
-    marginBottom: '8px',
-    fontSize: '0.9rem',
-    color: '#333',
+    display: "block",
+    fontWeight: "bold",
+    marginBottom: "8px",
+    fontSize: "0.9rem",
+    color: "#333",
   },
   input: {
-    width: '100%',
-    padding: '14px 16px',
-    border: '1.5px solid #ddd',
-    borderRadius: '10px',
-    fontSize: '1rem',
+    width: "100%",
+    padding: "14px 16px",
+    border: "1.5px solid #ddd",
+    borderRadius: "10px",
+    fontSize: "1rem",
   },
   modeLabel: {
-    fontWeight: 'bold',
-    fontSize: '0.9rem',
-    color: '#333',
-    marginBottom: '14px',
-    margin: '0 0 14px',
+    fontWeight: "bold",
+    fontSize: "0.9rem",
+    color: "#333",
+    marginBottom: "14px",
+    margin: "0 0 14px",
   },
   modeButtons: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '24px',
+    display: "flex",
+    gap: "12px",
+    marginBottom: "24px",
   },
   modeButton: {
     flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: '20px 8px',
-    border: '2px solid #ddd',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    backgroundColor: '#fff',
-    transition: 'all 0.15s',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "20px 8px",
+    border: "2px solid #ddd",
+    borderRadius: "12px",
+    cursor: "pointer",
+    backgroundColor: "#fff",
+    transition: "all 0.15s",
   },
   modeButtonActive: {
-    border: '2px solid #4a90e2',
-    backgroundColor: '#f0f6ff',
+    border: "2px solid #4a90e2",
+    backgroundColor: "#f0f6ff",
   },
   modeIcon: {
-    fontSize: '1.8rem',
-    fontWeight: 'bold',
-    marginBottom: '10px',
-    color: '#4a90e2',
+    fontSize: "1.8rem",
+    fontWeight: "bold",
+    marginBottom: "10px",
+    color: "#4a90e2",
   },
   modeName: {
-    fontWeight: 'bold',
-    fontSize: '0.85rem',
-    marginBottom: '4px',
-    color: '#1a1a1a',
+    fontWeight: "bold",
+    fontSize: "0.85rem",
+    marginBottom: "4px",
+    color: "#1a1a1a",
   },
   modeDesc: {
-    fontSize: '0.72rem',
-    color: '#888',
+    fontSize: "0.72rem",
+    color: "#888",
   },
   error: {
-    color: '#e53e3e',
-    fontSize: '0.85rem',
-    marginBottom: '0',
-    padding: '10px 14px',
-    backgroundColor: '#fff5f5',
-    borderRadius: '8px',
-    border: '1px solid #feb2b2',
+    color: "#e53e3e",
+    fontSize: "0.85rem",
+    marginBottom: "0",
+    padding: "10px 14px",
+    backgroundColor: "#fff5f5",
+    borderRadius: "8px",
+    border: "1px solid #feb2b2",
   },
   ended: {
-    color: '#92400e',
-    fontSize: '0.85rem',
-    marginBottom: '0',
-    padding: '10px 14px',
-    backgroundColor: '#fffbeb',
-    borderRadius: '8px',
-    border: '1px solid #fcd34d',
+    color: "#92400e",
+    fontSize: "0.85rem",
+    marginBottom: "0",
+    padding: "10px 14px",
+    backgroundColor: "#fffbeb",
+    borderRadius: "8px",
+    border: "1px solid #fcd34d",
   },
   footer: {
-    position: 'sticky',
+    position: "sticky",
     bottom: 0,
-    backgroundColor: '#fff',
-    borderTop: '1px solid #eee',
-    padding: '12px 16px',
-    paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+    backgroundColor: "#fff",
+    borderTop: "1px solid #eee",
+    padding: "12px 16px",
+    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
   },
   footerInner: {
-    maxWidth: '480px',
-    margin: '0 auto',
+    maxWidth: "480px",
+    margin: "0 auto",
   },
   startButton: {
-    width: '100%',
-    padding: '18px',
-    backgroundColor: '#4a90e2',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
+    width: "100%",
+    padding: "18px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    fontSize: "1.05rem",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
   startButtonDisabled: {
-    backgroundColor: '#bbb',
-    cursor: 'not-allowed',
+    backgroundColor: "#bbb",
+    cursor: "not-allowed",
   },
 };
 

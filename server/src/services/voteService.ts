@@ -1,4 +1,4 @@
-import type { VoteChoice, VotingResult } from 'shared/types';
+import type { VoteChoice, VotingResult } from "shared/types";
 
 /**
  * 1つの飲食店の投票集計
@@ -23,7 +23,7 @@ export interface RestaurantVoteSummary {
  */
 export function judgeVotes(
   summaries: RestaurantVoteSummary[],
-  totalParticipants: number
+  totalParticipants: number,
 ): VotingResult {
   if (summaries.length === 0) {
     return {
@@ -36,7 +36,7 @@ export function judgeVotes(
   // 各飲食店の "keep" 票数を集計
   const keepCounts = summaries.map((s) => ({
     restaurantId: s.restaurantId,
-    keepCount: s.votes.filter((v) => v.choice === 'keep').length,
+    keepCount: s.votes.filter((v) => v.choice === "keep").length,
   }));
 
   // 全員一致でキープされた飲食店を抽出
@@ -74,7 +74,7 @@ export function judgeVotes(
 export function isVotingComplete(
   summaries: RestaurantVoteSummary[],
   totalParticipants: number,
-  totalRestaurants: number
+  totalRestaurants: number,
 ): boolean {
   if (summaries.length !== totalRestaurants) return false;
   return summaries.every((s) => s.votes.length === totalParticipants);

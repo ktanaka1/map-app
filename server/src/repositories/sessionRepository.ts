@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import type { SessionMode, SessionPhase } from 'shared/types';
+import { PrismaClient } from "@prisma/client";
+import type { SessionMode, SessionPhase } from "shared/types";
 
 const prisma = new PrismaClient();
 
@@ -7,14 +7,11 @@ export const sessionRepository = {
   /**
    * セッションを新規作成する
    */
-  async create(data: {
-    mode: SessionMode;
-    hostId: string;
-  }) {
+  async create(data: { mode: SessionMode; hostId: string }) {
     return prisma.session.create({
       data: {
         mode: data.mode,
-        phase: 'waiting' as SessionPhase,
+        phase: "waiting" as SessionPhase,
         hostId: data.hostId,
         keywords: [],
       },

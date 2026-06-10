@@ -1,9 +1,9 @@
-import { Router } from 'express';
-import { getSession } from '../services/sessionStore';
+import { Router } from "express";
+import { getSession } from "../services/sessionStore";
 
 export const sessionRouter = Router();
 
-const CLIENT_URL = process.env.CLIENT_URL ?? 'http://localhost:5173';
+const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
 
 /**
  * POST /api/sessions
@@ -11,16 +11,16 @@ const CLIENT_URL = process.env.CLIENT_URL ?? 'http://localhost:5173';
  * ※セッション作成はSocket.IOの create_session イベントで行うため、
  *   このエンドポイントは既存セッションの情報取得に使用
  */
-sessionRouter.post('/', async (req, res) => {
+sessionRouter.post("/", async (req, res) => {
   const { sessionId } = req.body as { sessionId?: string };
   if (!sessionId) {
-    res.status(400).json({ error: 'sessionId is required' });
+    res.status(400).json({ error: "sessionId is required" });
     return;
   }
 
   const entry = getSession(sessionId);
   if (!entry) {
-    res.status(404).json({ error: 'Session not found' });
+    res.status(404).json({ error: "Session not found" });
     return;
   }
 
@@ -36,12 +36,12 @@ sessionRouter.post('/', async (req, res) => {
  * GET /api/sessions/:id
  * セッション情報取得
  */
-sessionRouter.get('/:id', async (req, res) => {
+sessionRouter.get("/:id", async (req, res) => {
   const { id } = req.params;
 
   const entry = getSession(id);
   if (!entry) {
-    res.status(404).json({ error: 'Session not found' });
+    res.status(404).json({ error: "Session not found" });
     return;
   }
 

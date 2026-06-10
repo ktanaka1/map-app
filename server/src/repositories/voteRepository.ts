@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import type { VoteChoice } from 'shared/types';
+import { PrismaClient } from "@prisma/client";
+import type { VoteChoice } from "shared/types";
 
 const prisma = new PrismaClient();
 

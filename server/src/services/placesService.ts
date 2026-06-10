@@ -1,13 +1,13 @@
-import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
-import type { Restaurant } from 'shared/types';
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+import type { Restaurant } from "shared/types";
 
 // TODO: Places API (New) に切り替える
 // 現在は旧 Places API を使用（APIキーの制限設定でNew APIが弾かれるため暫定対応）
 // New API エンドポイント: https://places.googleapis.com/v1/places:searchText
 // New API エンドポイント: https://places.googleapis.com/v1/places:searchNearby
 
-const PLACES_API_BASE = 'https://maps.googleapis.com/maps/api/place';
+const PLACES_API_BASE = "https://maps.googleapis.com/maps/api/place";
 
 interface LegacyPhoto {
   photo_reference: string;
@@ -46,7 +46,10 @@ function buildPhotoUrl(photoReference: string, apiKey: string): string {
 }
 
 /** Place Details で写真を最大5枚取得してレストランに追加する */
-async function enrichPhotos(restaurants: Restaurant[], apiKey: string): Promise<Restaurant[]> {
+async function enrichPhotos(
+  restaurants: Restaurant[],
+  apiKey: string,
+): Promise<Restaurant[]> {
   return Promise.all(
     restaurants.map(async (r) => {
       try {
@@ -54,8 +57,8 @@ async function enrichPhotos(restaurants: Restaurant[], apiKey: string): Promise<
           `${PLACES_API_BASE}/details/json`,
           {
             timeout: 5000,
-            params: { place_id: r.placeId, fields: 'photos', key: apiKey },
-          }
+            params: { place_id: r.placeId, fields: "photos", key: apiKey },
+          },
         );
         const photos = (res.data.result?.photos ?? [])
           .slice(0, 5)
@@ -64,7 +67,7 @@ async function enrichPhotos(restaurants: Restaurant[], apiKey: string): Promise<
       } catch {
         return r;
       }
-    })
+    }),
   );
 }
 
@@ -77,7 +80,7 @@ function mapPlaceToRestaurant(place: LegacyPlace, apiKey: string): Restaurant {
     id: uuidv4(),
     placeId: place.place_id,
     name: place.name,
-    address: place.vicinity ?? place.formatted_address ?? '',
+    address: place.vicinity ?? place.formatted_address ?? "",
     rating: place.rating ?? 0,
     reviewCount: place.user_ratings_total ?? 0,
     priceLevel: place.price_level ?? null,
@@ -94,10 +97,10 @@ async function searchNearby(
   lng: number,
   radiusMeters: number = 500,
   maxResults: number = 10,
-  maxPriceLevel: number | null = null
+  maxPriceLevel: number | null = null,
 ): Promise<Restaurant[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY が設定されていません');
+  if (!apiKey) throw new Error("GOOGLE_PLACES_API_KEY が設定されていません");
 
   const response = await axios.get<LegacySearchResponse>(
     `${PLACES_API_BASE}/nearbysearch/json`,
@@ -106,20 +109,25 @@ async function searchNearby(
       params: {
         location: `${lat},${lng}`,
         radius: radiusMeters,
-        type: 'restaurant',
+        type: "restaurant",
         maxresults: maxResults,
-        language: 'ja',
+        language: "ja",
         key: apiKey,
         ...(maxPriceLevel !== null && { maxprice: maxPriceLevel }),
       },
-    }
+    },
   );
 
-  if (response.data.status !== 'OK' && response.data.status !== 'ZERO_RESULTS') {
+  if (
+    response.data.status !== "OK" &&
+    response.data.status !== "ZERO_RESULTS"
+  ) {
     throw new Error(`Places API error: ${response.data.status}`);
   }
 
-  return response.data.results.slice(0, maxResults).map((p) => mapPlaceToRestaurant(p, apiKey));
+  return response.data.results
+    .slice(0, maxResults)
+    .map((p) => mapPlaceToRestaurant(p, apiKey));
 }
 
 async function searchByText(
@@ -128,10 +136,10 @@ async function searchByText(
   lng: number,
   radiusMeters: number = 500,
   maxResults: number = 10,
-  maxPriceLevel: number | null = null
+  maxPriceLevel: number | null = null,
 ): Promise<Restaurant[]> {
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY が設定されていません');
+  if (!apiKey) throw new Error("GOOGLE_PLACES_API_KEY が設定されていません");
 
   const response = await axios.get<LegacySearchResponse>(
     `${PLACES_API_BASE}/textsearch/json`,
@@ -139,21 +147,26 @@ async function searchByText(
       timeout: 8000,
       params: {
         query: textQuery,
-        type: 'restaurant',
+        type: "restaurant",
         location: `${lat},${lng}`,
         radius: radiusMeters,
-        language: 'ja',
+        language: "ja",
         key: apiKey,
         ...(maxPriceLevel !== null && { maxprice: maxPriceLevel }),
       },
-    }
+    },
   );
 
-  if (response.data.status !== 'OK' && response.data.status !== 'ZERO_RESULTS') {
+  if (
+    response.data.status !== "OK" &&
+    response.data.status !== "ZERO_RESULTS"
+  ) {
     throw new Error(`Places API error: ${response.data.status}`);
   }
 
-  return response.data.results.slice(0, maxResults).map((p) => mapPlaceToRestaurant(p, apiKey));
+  return response.data.results
+    .slice(0, maxResults)
+    .map((p) => mapPlaceToRestaurant(p, apiKey));
 }
 
 export async function searchRestaurants(
@@ -161,17 +174,28 @@ export async function searchRestaurants(
   lat: number,
   lng: number,
   radiusMeters: number = 500,
-  maxPriceLevel: number | null = null
+  maxPriceLevel: number | null = null,
 ): Promise<Restaurant[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? '';
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY ?? "";
 
   let restaurants: Restaurant[];
   if (keywords.length > 0) {
-    const textQuery = keywords.join(' ');
-    console.log(`[PlacesService] Text Search: query="${textQuery}", lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`);
-    restaurants = await searchByText(textQuery, lat, lng, radiusMeters, 10, maxPriceLevel);
+    const textQuery = keywords.join(" ");
+    console.log(
+      `[PlacesService] Text Search: query="${textQuery}", lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`,
+    );
+    restaurants = await searchByText(
+      textQuery,
+      lat,
+      lng,
+      radiusMeters,
+      10,
+      maxPriceLevel,
+    );
   } else {
-    console.log(`[PlacesService] Nearby Search: lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`);
+    console.log(
+      `[PlacesService] Nearby Search: lat=${lat}, lng=${lng}, radius=${radiusMeters}m, maxPrice=${maxPriceLevel}`,
+    );
     restaurants = await searchNearby(lat, lng, radiusMeters, 10, maxPriceLevel);
   }
 

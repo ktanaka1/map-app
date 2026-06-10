@@ -19,6 +19,7 @@ disable-model-invocation: true
 ## 手順
 
 ### 1. 変更状況の確認
+
 ```bash
 git status
 git diff --stat
@@ -26,6 +27,7 @@ git log --oneline -5
 ```
 
 ### 2. 変更のグループ化
+
 - 機能追加は `feat:`
 - バグ修正は `fix:`
 - リファクタリングは `refactor:`
@@ -33,6 +35,7 @@ git log --oneline -5
 - その他の雑務は `chore:`
 
 ### 3. グループごとにコミット
+
 ```bash
 git add <関連ファイル>
 git commit -m "$(cat <<'EOF'
@@ -46,6 +49,7 @@ EOF
 ```
 
 ## 注意事項
+
 - `git add -A` や `git add .` は避け、ファイルを明示的に指定する
 - `.env` や認証情報を含むファイルはコミットしない
 - pushはユーザーの明示的な指示がある場合のみ実行
