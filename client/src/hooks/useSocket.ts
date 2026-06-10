@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
   Session,
   Participant,
   VotingResult,
-} from 'shared/types';
-import type { Restaurant } from 'shared/types';
+} from "shared/types";
+import type { Restaurant } from "shared/types";
 
 // ========================================
 // localStorage セッション保存ユーティリティ
 // ========================================
 
-const SESSION_STORAGE_KEY = 'map_app_session';
+const SESSION_STORAGE_KEY = "map_app_session";
 
 export interface StoredSession {
   sessionId: string;
@@ -50,7 +50,7 @@ export function clearSessionFromStorage(): void {
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:3000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3000";
 
 export interface SessionState {
   session: Session | null;
@@ -73,36 +73,70 @@ export interface UseSocketReturn {
   state: SessionState;
   /** ページリロード後のリジョイン処理中フラグ */
   isRejoining: boolean;
+  /** サーバーとの接続状態（切断中バナー表示用） */
+  isConnected: boolean;
   createSession: (
-    mode: 'solo' | 'multi',
+    mode: "solo" | "multi",
     hostName: string,
-    callback: (res: { success: boolean; sessionId?: string; participant?: Participant; session?: Session; error?: string }) => void
+    callback: (res: {
+      success: boolean;
+      sessionId?: string;
+      participant?: Participant;
+      session?: Session;
+      error?: string;
+    }) => void,
   ) => void;
   joinSession: (
     sessionId: string,
     participantName: string,
-    callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant }) => void
+    callback: (res: {
+      success: boolean;
+      error?: string;
+      session?: Session;
+      participant?: Participant;
+    }) => void,
   ) => void;
-  confirmParticipants: (sessionId: string, callback: (res: { success: boolean; error?: string }) => void) => void;
-  addKeyword: (sessionId: string, keyword: string, callback: (res: { success: boolean; error?: string }) => void) => void;
-  removeKeyword: (sessionId: string, keyword: string, callback: (res: { success: boolean; error?: string }) => void) => void;
+  confirmParticipants: (
+    sessionId: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
+  addKeyword: (
+    sessionId: string,
+    keyword: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
+  removeKeyword: (
+    sessionId: string,
+    keyword: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
   startSearch: (
     sessionId: string,
     location: { lat: number; lng: number },
     radius: number,
     callback: (res: { success: boolean; error?: string }) => void,
-    maxPriceLevel?: number | null
+    maxPriceLevel?: number | null,
   ) => void;
   submitVote: (
     sessionId: string,
     restaurantId: string,
-    choice: 'keep' | 'reject',
-    callback: (res: { success: boolean; error?: string }) => void
+    choice: "keep" | "reject",
+    callback: (res: { success: boolean; error?: string }) => void,
   ) => void;
   rejoinSession: (
     sessionId: string,
     participantId: string,
-    callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant; restaurants?: Restaurant[] }) => void
+    callback: (res: {
+      success: boolean;
+      error?: string;
+      session?: Session;
+      participant?: Participant;
+      restaurants?: Restaurant[];
+    }) => void,
+  ) => void;
+  leaveSession: (
+    sessionId: string,
+    callback?: (res: { success: boolean; error?: string }) => void,
   ) => void;
 }
 
@@ -125,8 +159,9 @@ function getSocket(): AppSocket {
   if (!socketSingleton) {
     socketSingleton = io(SOCKET_URL, {
       autoConnect: false,
+      // 回数制限を設けると電波の悪い環境で静かに再接続を諦めてしまうため無制限にする
+      // （セッション自体の生存はサーバー側の切断猶予期間で管理される）
       reconnection: true,
-      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     }) as AppSocket;
   }
@@ -137,6 +172,9 @@ export function useSocket(): UseSocketReturn {
   const socketRef = useRef<AppSocket>(getSocket());
   const [state, setState] = useState<SessionState>(initialState);
   const [isRejoining, setIsRejoining] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(
+    socketRef.current.connected,
+  );
 
   const updateState = useCallback((partial: Partial<SessionState>) => {
     setState((prev) => ({ ...prev, ...partial }));
@@ -150,7 +188,8 @@ export function useSocket(): UseSocketReturn {
     }
 
     const onConnect = () => {
-      console.log('[Socket] connected:', socket.id);
+      console.log("[Socket] connected:", socket.id);
+      setIsConnected(true);
 
       // 接続確立後にリジョイン試行
       const stored = loadSessionFromStorage();
@@ -164,33 +203,44 @@ export function useSocket(): UseSocketReturn {
       if (urlSessionId !== stored.sessionId) return;
 
       setIsRejoining(true);
-      console.log('[Socket] rejoin_session 試行:', stored.sessionId);
+      console.log("[Socket] rejoin_session 試行:", stored.sessionId);
 
-      socket.emit('rejoin_session', { sessionId: stored.sessionId, participantId: stored.participantId }, (res) => {
-        setIsRejoining(false);
-        if (res.success && res.session && res.participant) {
-          console.log('[Socket] rejoin_session 成功:', stored.sessionId);
-          setState({
-            ...initialState,
-            session: res.session,
-            me: res.participant,
-            participants: res.session.participants,
-            restaurants: res.restaurants ?? [],
-          });
-        } else {
-          console.warn('[Socket] rejoin_session 失敗:', res.error);
-          clearSessionFromStorage();
-          window.location.href = '/';
-        }
-      });
+      socket.emit(
+        "rejoin_session",
+        { sessionId: stored.sessionId, participantId: stored.participantId },
+        (res) => {
+          setIsRejoining(false);
+          if (res.success && res.session && res.participant) {
+            console.log("[Socket] rejoin_session 成功:", stored.sessionId);
+            setState({
+              ...initialState,
+              session: res.session,
+              me: res.participant,
+              participants: res.session.participants,
+              restaurants: res.restaurants ?? [],
+              // 投票済み・進捗・結果を復元（リロードで投票がやり直しにならないように）
+              votedRestaurantIds: new Set(res.votedRestaurantIds ?? []),
+              participantVoteCounts: new Map(
+                Object.entries(res.participantVoteCounts ?? {}),
+              ),
+              votingResult: res.votingResult ?? null,
+            });
+          } else {
+            console.warn("[Socket] rejoin_session 失敗:", res.error);
+            clearSessionFromStorage();
+            window.location.href = "/";
+          }
+        },
+      );
     };
 
     const onDisconnect = (reason: string) => {
-      console.log('[Socket] disconnected:', reason);
+      console.log("[Socket] disconnected:", reason);
+      setIsConnected(false);
     };
 
     const onError = (payload: { code: string; message: string }) => {
-      console.error('[Socket] error:', payload);
+      console.error("[Socket] error:", payload);
       updateState({ error: payload.message });
     };
 
@@ -220,7 +270,10 @@ export function useSocket(): UseSocketReturn {
       }));
     };
 
-    const onSessionPhaseChanged = (payload: { phase: Session['phase']; session: Session }) => {
+    const onSessionPhaseChanged = (payload: {
+      phase: Session["phase"];
+      session: Session;
+    }) => {
       setState((prev) => ({
         ...prev,
         session: payload.session,
@@ -228,7 +281,11 @@ export function useSocket(): UseSocketReturn {
       }));
     };
 
-    const onKeywordAdded = (payload: { keyword: string; keywords: string[]; addedBy: string }) => {
+    const onKeywordAdded = (payload: {
+      keyword: string;
+      keywords: string[];
+      addedBy: string;
+    }) => {
       setState((prev) => ({
         ...prev,
         session: prev.session
@@ -237,7 +294,11 @@ export function useSocket(): UseSocketReturn {
       }));
     };
 
-    const onKeywordRemoved = (payload: { keyword: string; keywords: string[]; removedBy: string }) => {
+    const onKeywordRemoved = (payload: {
+      keyword: string;
+      keywords: string[];
+      removedBy: string;
+    }) => {
       setState((prev) => ({
         ...prev,
         session: prev.session
@@ -258,9 +319,13 @@ export function useSocket(): UseSocketReturn {
         const newParticipantCounts = new Map(prev.participantVoteCounts);
         newParticipantCounts.set(
           payload.participantId,
-          (newParticipantCounts.get(payload.participantId) ?? 0) + 1
+          (newParticipantCounts.get(payload.participantId) ?? 0) + 1,
         );
-        return { ...prev, voteProgress: newProgress, participantVoteCounts: newParticipantCounts };
+        return {
+          ...prev,
+          voteProgress: newProgress,
+          participantVoteCounts: newParticipantCounts,
+        };
       });
     };
 
@@ -269,11 +334,19 @@ export function useSocket(): UseSocketReturn {
     };
 
     const onSessionEnded = (payload: { reason: string }) => {
-      console.log('[Socket] session_ended:', payload.reason);
+      console.log("[Socket] session_ended:", payload.reason);
       clearSessionFromStorage();
-      const reason = payload.reason === 'host_left' ? 'ホストが退室したため' :
-                     payload.reason === 'participant_left' ? '参加者が退室したため' : '';
-      const msg = reason ? `セッションが終了しました（${reason}）` : 'セッションが終了しました';
+      const reason =
+        payload.reason === "host_left"
+          ? "ホストが退室したため"
+          : payload.reason === "participant_left"
+            ? "参加者が退室したため"
+            : payload.reason === "timeout"
+              ? "一定時間が経過したため"
+              : "";
+      const msg = reason
+        ? `セッションが終了しました（${reason}）`
+        : "セッションが終了しました";
       window.location.replace(`/?ended=${encodeURIComponent(msg)}`);
     };
 
@@ -281,42 +354,48 @@ export function useSocket(): UseSocketReturn {
       updateState({ restaurants: payload.restaurants });
     };
 
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('error', onError);
-    socket.on('participant_joined', onParticipantJoined);
-    socket.on('participant_left', onParticipantLeft);
-    socket.on('session_phase_changed', onSessionPhaseChanged);
-    socket.on('keyword_added', onKeywordAdded);
-    socket.on('keyword_removed', onKeywordRemoved);
-    socket.on('vote_submitted', onVoteSubmitted);
-    socket.on('voting_completed', onVotingCompleted);
-    socket.on('session_ended', onSessionEnded);
-    socket.on('restaurants_found', onRestaurantsFound);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("error", onError);
+    socket.on("participant_joined", onParticipantJoined);
+    socket.on("participant_left", onParticipantLeft);
+    socket.on("session_phase_changed", onSessionPhaseChanged);
+    socket.on("keyword_added", onKeywordAdded);
+    socket.on("keyword_removed", onKeywordRemoved);
+    socket.on("vote_submitted", onVoteSubmitted);
+    socket.on("voting_completed", onVotingCompleted);
+    socket.on("session_ended", onSessionEnded);
+    socket.on("restaurants_found", onRestaurantsFound);
 
     return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('error', onError);
-      socket.off('participant_joined', onParticipantJoined);
-      socket.off('participant_left', onParticipantLeft);
-      socket.off('session_phase_changed', onSessionPhaseChanged);
-      socket.off('keyword_added', onKeywordAdded);
-      socket.off('keyword_removed', onKeywordRemoved);
-      socket.off('vote_submitted', onVoteSubmitted);
-      socket.off('voting_completed', onVotingCompleted);
-      socket.off('session_ended', onSessionEnded);
-      socket.off('restaurants_found', onRestaurantsFound);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("error", onError);
+      socket.off("participant_joined", onParticipantJoined);
+      socket.off("participant_left", onParticipantLeft);
+      socket.off("session_phase_changed", onSessionPhaseChanged);
+      socket.off("keyword_added", onKeywordAdded);
+      socket.off("keyword_removed", onKeywordRemoved);
+      socket.off("vote_submitted", onVoteSubmitted);
+      socket.off("voting_completed", onVotingCompleted);
+      socket.off("session_ended", onSessionEnded);
+      socket.off("restaurants_found", onRestaurantsFound);
     };
   }, [updateState]);
 
   const createSession = useCallback(
     (
-      mode: 'solo' | 'multi',
+      mode: "solo" | "multi",
       hostName: string,
-      callback: (res: { success: boolean; sessionId?: string; participant?: Participant; session?: Session; error?: string }) => void
+      callback: (res: {
+        success: boolean;
+        sessionId?: string;
+        participant?: Participant;
+        session?: Session;
+        error?: string;
+      }) => void,
     ) => {
-      socketRef.current.emit('create_session', { mode, hostName }, (res) => {
+      socketRef.current.emit("create_session", { mode, hostName }, (res) => {
         if (res.success && res.participant && res.session) {
           setState({
             ...initialState,
@@ -334,17 +413,22 @@ export function useSocket(): UseSocketReturn {
         callback(res);
       });
     },
-    []
+    [],
   );
 
   const joinSession = useCallback(
     (
       sessionId: string,
       participantName: string,
-      callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant }) => void
+      callback: (res: {
+        success: boolean;
+        error?: string;
+        session?: Session;
+        participant?: Participant;
+      }) => void,
     ) => {
       socketRef.current.emit(
-        'join_session',
+        "join_session",
         { sessionId, participantName },
         (res) => {
           if (res.success && res.session && res.participant) {
@@ -362,31 +446,46 @@ export function useSocket(): UseSocketReturn {
             });
           }
           callback(res);
-        }
+        },
       );
     },
-    []
+    [],
   );
 
   const confirmParticipants = useCallback(
-    (sessionId: string, callback: (res: { success: boolean; error?: string }) => void) => {
-      socketRef.current.emit('confirm_participants', { sessionId }, callback);
+    (
+      sessionId: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit("confirm_participants", { sessionId }, callback);
     },
-    []
+    [],
   );
 
   const addKeyword = useCallback(
-    (sessionId: string, keyword: string, callback: (res: { success: boolean; error?: string }) => void) => {
-      socketRef.current.emit('add_keyword', { sessionId, keyword }, callback);
+    (
+      sessionId: string,
+      keyword: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit("add_keyword", { sessionId, keyword }, callback);
     },
-    []
+    [],
   );
 
   const removeKeyword = useCallback(
-    (sessionId: string, keyword: string, callback: (res: { success: boolean; error?: string }) => void) => {
-      socketRef.current.emit('remove_keyword', { sessionId, keyword }, callback);
+    (
+      sessionId: string,
+      keyword: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit(
+        "remove_keyword",
+        { sessionId, keyword },
+        callback,
+      );
     },
-    []
+    [],
   );
 
   const startSearch = useCallback(
@@ -395,60 +494,97 @@ export function useSocket(): UseSocketReturn {
       location: { lat: number; lng: number },
       radius: number,
       callback: (res: { success: boolean; error?: string }) => void,
-      maxPriceLevel: number | null = null
+      maxPriceLevel: number | null = null,
     ) => {
-      socketRef.current.emit('start_search', { sessionId, location, radius, maxPriceLevel }, callback);
+      socketRef.current.emit(
+        "start_search",
+        { sessionId, location, radius, maxPriceLevel },
+        callback,
+      );
     },
-    []
+    [],
   );
 
   const submitVote = useCallback(
     (
       sessionId: string,
       restaurantId: string,
-      choice: 'keep' | 'reject',
-      callback: (res: { success: boolean; error?: string }) => void
+      choice: "keep" | "reject",
+      callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit('submit_vote', { sessionId, restaurantId, choice }, (res) => {
-        if (res.success) {
-          setState((prev) => {
-            const newVoted = new Set(prev.votedRestaurantIds);
-            newVoted.add(restaurantId);
-            return { ...prev, votedRestaurantIds: newVoted };
-          });
-        }
-        callback(res);
-      });
+      socketRef.current.emit(
+        "submit_vote",
+        { sessionId, restaurantId, choice },
+        (res) => {
+          if (res.success) {
+            setState((prev) => {
+              const newVoted = new Set(prev.votedRestaurantIds);
+              newVoted.add(restaurantId);
+              return { ...prev, votedRestaurantIds: newVoted };
+            });
+          }
+          callback(res);
+        },
+      );
     },
-    []
+    [],
   );
 
   const rejoinSession = useCallback(
     (
       sessionId: string,
       participantId: string,
-      callback: (res: { success: boolean; error?: string; session?: Session; participant?: Participant; restaurants?: Restaurant[] }) => void
+      callback: (res: {
+        success: boolean;
+        error?: string;
+        session?: Session;
+        participant?: Participant;
+        restaurants?: Restaurant[];
+      }) => void,
     ) => {
-      socketRef.current.emit('rejoin_session', { sessionId, participantId }, (res) => {
-        if (res.success && res.session && res.participant) {
-          setState({
-            ...initialState,
-            session: res.session,
-            me: res.participant,
-            participants: res.session.participants,
-            restaurants: res.restaurants ?? [],
-          });
-        }
-        callback(res);
+      socketRef.current.emit(
+        "rejoin_session",
+        { sessionId, participantId },
+        (res) => {
+          if (res.success && res.session && res.participant) {
+            setState({
+              ...initialState,
+              session: res.session,
+              me: res.participant,
+              participants: res.session.participants,
+              restaurants: res.restaurants ?? [],
+              votedRestaurantIds: new Set(res.votedRestaurantIds ?? []),
+              participantVoteCounts: new Map(
+                Object.entries(res.participantVoteCounts ?? {}),
+              ),
+              votingResult: res.votingResult ?? null,
+            });
+          }
+          callback(res);
+        },
+      );
+    },
+    [],
+  );
+
+  const leaveSession = useCallback(
+    (
+      sessionId: string,
+      callback?: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit("leave_session", { sessionId }, (res) => {
+        setState(initialState);
+        callback?.(res);
       });
     },
-    []
+    [],
   );
 
   return {
     socket: socketRef.current,
     state,
     isRejoining,
+    isConnected,
     createSession,
     joinSession,
     confirmParticipants,
@@ -457,5 +593,6 @@ export function useSocket(): UseSocketReturn {
     startSearch,
     submitVote,
     rejoinSession,
+    leaveSession,
   };
 }

@@ -1,13 +1,13 @@
-import { useNavigate, useParams } from 'react-router-dom';
-import type { Restaurant } from 'shared/types';
-import { useSocketContext } from '../hooks/useSocketContext';
-import { clearSessionFromStorage } from '../hooks/useSocket';
-import RejoiningOverlay from '../components/RejoiningOverlay';
+import { useNavigate, useParams } from "react-router-dom";
+import type { Restaurant } from "shared/types";
+import { useSocketContext } from "../hooks/useSocketContext";
+import { clearSessionFromStorage } from "../hooks/useSocket";
+import RejoiningOverlay from "../components/RejoiningOverlay";
 
 function ResultPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, isRejoining } = useSocketContext();
+  const { state, isRejoining, leaveSession } = useSocketContext();
   const { votingResult, restaurants } = state;
 
   if (isRejoining) return <RejoiningOverlay />;
@@ -53,12 +53,15 @@ function ResultPage() {
               <span style={styles.bannerEmoji}>!</span>
               <div>
                 <p style={styles.fallbackTitle}>意見が分かれましたが...</p>
-                <p style={styles.fallbackSubtitle}>最も支持されたお店をご提案します</p>
+                <p style={styles.fallbackSubtitle}>
+                  最も支持されたお店をご提案します
+                </p>
               </div>
             </div>
-            {fallbackRestaurant !== null && fallbackRestaurant !== undefined && (
-              <RestaurantCard restaurant={fallbackRestaurant} highlight />
-            )}
+            {fallbackRestaurant !== null &&
+              fallbackRestaurant !== undefined && (
+                <RestaurantCard restaurant={fallbackRestaurant} highlight />
+              )}
           </div>
         ) : (
           <div style={styles.section}>
@@ -82,8 +85,10 @@ function ResultPage() {
           <button
             type="button"
             onClick={() => {
+              // サーバー側のセッションからも退出させる（残留するとメモリに溜まり続ける）
+              if (sessionId) leaveSession(sessionId);
               clearSessionFromStorage();
-              navigate('/');
+              navigate("/");
             }}
             style={styles.retryButton}
           >
@@ -107,28 +112,30 @@ function RestaurantCard({
   const stripPhotos = allPhotos.slice(1);
 
   return (
-    <div style={{ ...cardStyles.card, ...(highlight ? cardStyles.highlight : {}) }}>
+    <div
+      style={{ ...cardStyles.card, ...(highlight ? cardStyles.highlight : {}) }}
+    >
       {heroPhoto && (
         <img
           src={heroPhoto}
           alt={restaurant.name}
           style={cardStyles.heroPhoto}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
         />
       )}
 
       <div style={cardStyles.cardBody}>
-        {highlight && (
-          <div style={cardStyles.highlightBadge}>おすすめ</div>
-        )}
+        {highlight && <div style={cardStyles.highlightBadge}>おすすめ</div>}
 
         <h3 style={cardStyles.name}>{restaurant.name}</h3>
         <p style={cardStyles.address}>{restaurant.address}</p>
 
         <div style={cardStyles.ratingRow}>
           <span style={cardStyles.stars}>
-            {'★'.repeat(Math.round(restaurant.rating))}
-            {'☆'.repeat(5 - Math.round(restaurant.rating))}
+            {"★".repeat(Math.round(restaurant.rating))}
+            {"☆".repeat(5 - Math.round(restaurant.rating))}
           </span>
           <span style={cardStyles.ratingValue}>
             {restaurant.rating.toFixed(1)}
@@ -140,7 +147,7 @@ function RestaurantCard({
 
         {restaurant.priceLevel !== null && (
           <p style={cardStyles.price}>
-            価格帯: {'¥'.repeat(restaurant.priceLevel + 1)}
+            価格帯: {"¥".repeat(restaurant.priceLevel + 1)}
           </p>
         )}
 
@@ -152,7 +159,9 @@ function RestaurantCard({
                 src={url}
                 alt={`${restaurant.name} ${i + 2}`}
                 style={cardStyles.photoThumb}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
               />
             ))}
           </div>
@@ -185,259 +194,259 @@ function RestaurantCard({
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#f5f5f5',
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "#f5f5f5",
   },
   centerBox: {
     flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '16px',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "16px",
   },
   spinner: {
-    width: '36px',
-    height: '36px',
-    border: '3px solid #eee',
-    borderTopColor: '#4a90e2',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-    margin: '0 auto',
+    width: "36px",
+    height: "36px",
+    border: "3px solid #eee",
+    borderTopColor: "#4a90e2",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    margin: "0 auto",
   },
   loadingText: {
-    color: '#888',
-    fontSize: '0.95rem',
+    color: "#888",
+    fontSize: "0.95rem",
     margin: 0,
   },
   stickyHeader: {
-    position: 'sticky',
+    position: "sticky",
     top: 0,
     zIndex: 10,
-    backgroundColor: '#fff',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+    backgroundColor: "#fff",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
   },
   headerInner: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '14px 16px',
-    maxWidth: '480px',
-    margin: '0 auto',
-    width: '100%',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "14px 16px",
+    maxWidth: "480px",
+    margin: "0 auto",
+    width: "100%",
   },
   headerTitle: {
-    fontSize: '1.2rem',
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: "1.2rem",
+    fontWeight: "bold",
+    color: "#1a1a1a",
     margin: 0,
   },
   sessionLabel: {
-    fontSize: '0.75rem',
-    color: '#aaa',
+    fontSize: "0.75rem",
+    color: "#aaa",
   },
   scrollArea: {
     flex: 1,
-    overflowY: 'auto',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
+    overflowY: "auto",
+    padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   section: {
-    width: '100%',
-    maxWidth: '480px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
+    width: "100%",
+    maxWidth: "480px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
   },
   fallbackBanner: {
-    backgroundColor: '#fef3cd',
-    border: '1px solid #fbbf24',
-    borderRadius: '12px',
-    padding: '16px 20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
+    backgroundColor: "#fef3cd",
+    border: "1px solid #fbbf24",
+    borderRadius: "12px",
+    padding: "16px 20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
   },
   successBanner: {
-    backgroundColor: '#f0fff4',
-    border: '1px solid #68d391',
-    borderRadius: '12px',
-    padding: '16px 20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
+    backgroundColor: "#f0fff4",
+    border: "1px solid #68d391",
+    borderRadius: "12px",
+    padding: "16px 20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
   },
   bannerEmoji: {
-    fontSize: '1.4rem',
-    fontWeight: 'bold',
+    fontSize: "1.4rem",
+    fontWeight: "bold",
     flexShrink: 0,
-    color: '#92400e',
+    color: "#92400e",
   },
   fallbackTitle: {
-    fontWeight: 'bold',
-    fontSize: '0.95rem',
-    color: '#92400e',
-    margin: '0 0 2px',
+    fontWeight: "bold",
+    fontSize: "0.95rem",
+    color: "#92400e",
+    margin: "0 0 2px",
   },
   fallbackSubtitle: {
-    color: '#92400e',
-    fontSize: '0.82rem',
+    color: "#92400e",
+    fontSize: "0.82rem",
     margin: 0,
   },
   successTitle: {
-    fontWeight: 'bold',
-    fontSize: '0.95rem',
-    color: '#22543d',
-    margin: '0 0 2px',
+    fontWeight: "bold",
+    fontSize: "0.95rem",
+    color: "#22543d",
+    margin: "0 0 2px",
   },
   successCount: {
-    color: '#276749',
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
+    color: "#276749",
+    fontSize: "1.5rem",
+    fontWeight: "bold",
     margin: 0,
   },
   footer: {
-    position: 'sticky',
+    position: "sticky",
     bottom: 0,
-    backgroundColor: '#fff',
-    borderTop: '1px solid #eee',
-    padding: '12px 16px',
-    paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+    backgroundColor: "#fff",
+    borderTop: "1px solid #eee",
+    padding: "12px 16px",
+    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
   },
   footerInner: {
-    maxWidth: '480px',
-    margin: '0 auto',
+    maxWidth: "480px",
+    margin: "0 auto",
   },
   retryButton: {
-    width: '100%',
-    padding: '18px',
-    backgroundColor: '#4a90e2',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
+    width: "100%",
+    padding: "18px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    fontSize: "1.05rem",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
 };
 
 const cardStyles: Record<string, React.CSSProperties> = {
   card: {
-    backgroundColor: '#fff',
-    borderRadius: '16px',
-    overflow: 'hidden',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    position: 'relative',
+    backgroundColor: "#fff",
+    borderRadius: "16px",
+    overflow: "hidden",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    position: "relative",
   },
   highlight: {
-    border: '2px solid #f6ad55',
-    boxShadow: '0 4px 16px rgba(246,173,85,0.25)',
+    border: "2px solid #f6ad55",
+    boxShadow: "0 4px 16px rgba(246,173,85,0.25)",
   },
   heroPhoto: {
-    width: '100%',
-    height: '200px',
-    objectFit: 'cover',
-    display: 'block',
+    width: "100%",
+    height: "200px",
+    objectFit: "cover",
+    display: "block",
   },
   cardBody: {
-    padding: '20px 24px',
+    padding: "20px 24px",
   },
   photoStrip: {
-    display: 'flex',
-    gap: '4px',
-    overflowX: 'auto',
-    marginTop: '14px',
-    scrollbarWidth: 'none' as const,
+    display: "flex",
+    gap: "4px",
+    overflowX: "auto",
+    marginTop: "14px",
+    scrollbarWidth: "none" as const,
   },
   photoThumb: {
     flexShrink: 0,
-    width: '100px',
-    height: '100px',
-    objectFit: 'cover',
-    borderRadius: '6px',
-    display: 'block',
+    width: "100px",
+    height: "100px",
+    objectFit: "cover",
+    borderRadius: "6px",
+    display: "block",
   },
   highlightBadge: {
-    display: 'inline-block',
-    backgroundColor: '#f6813d',
-    color: '#fff',
-    fontSize: '0.72rem',
-    fontWeight: 'bold',
-    padding: '3px 10px',
-    borderRadius: '10px',
-    marginBottom: '10px',
+    display: "inline-block",
+    backgroundColor: "#f6813d",
+    color: "#fff",
+    fontSize: "0.72rem",
+    fontWeight: "bold",
+    padding: "3px 10px",
+    borderRadius: "10px",
+    marginBottom: "10px",
   },
   name: {
-    fontSize: '1.25rem',
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    margin: '0 0 8px',
-    lineHeight: '1.3',
+    fontSize: "1.25rem",
+    fontWeight: "bold",
+    color: "#1a1a1a",
+    margin: "0 0 8px",
+    lineHeight: "1.3",
   },
   address: {
-    color: '#666',
-    fontSize: '0.85rem',
-    marginBottom: '12px',
-    lineHeight: '1.5',
+    color: "#666",
+    fontSize: "0.85rem",
+    marginBottom: "12px",
+    lineHeight: "1.5",
   },
   ratingRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    marginBottom: '6px',
-    flexWrap: 'wrap',
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    marginBottom: "6px",
+    flexWrap: "wrap",
   },
   stars: {
-    color: '#f6ad55',
-    fontSize: '1rem',
-    letterSpacing: '1px',
+    color: "#f6ad55",
+    fontSize: "1rem",
+    letterSpacing: "1px",
   },
   ratingValue: {
-    color: '#444',
-    fontSize: '0.95rem',
-    fontWeight: 'bold',
+    color: "#444",
+    fontSize: "0.95rem",
+    fontWeight: "bold",
   },
   reviewCount: {
-    color: '#888',
-    fontSize: '0.82rem',
+    color: "#888",
+    fontSize: "0.82rem",
   },
   price: {
-    color: '#666',
-    fontSize: '0.85rem',
-    marginBottom: '0',
+    color: "#666",
+    fontSize: "0.85rem",
+    marginBottom: "0",
   },
   actions: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
-    marginTop: '18px',
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginTop: "18px",
   },
   mapsLink: {
-    display: 'inline-block',
-    padding: '12px 20px',
-    backgroundColor: '#4285f4',
-    color: '#fff',
-    borderRadius: '10px',
-    textDecoration: 'none',
-    fontSize: '0.9rem',
-    fontWeight: 'bold',
+    display: "inline-block",
+    padding: "12px 20px",
+    backgroundColor: "#4285f4",
+    color: "#fff",
+    borderRadius: "10px",
+    textDecoration: "none",
+    fontSize: "0.9rem",
+    fontWeight: "bold",
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   websiteLink: {
-    display: 'inline-block',
-    padding: '12px 20px',
-    backgroundColor: '#f5f5f5',
-    color: '#333',
-    borderRadius: '10px',
-    textDecoration: 'none',
-    fontSize: '0.9rem',
-    border: '1px solid #ddd',
-    textAlign: 'center',
+    display: "inline-block",
+    padding: "12px 20px",
+    backgroundColor: "#f5f5f5",
+    color: "#333",
+    borderRadius: "10px",
+    textDecoration: "none",
+    fontSize: "0.9rem",
+    border: "1px solid #ddd",
+    textAlign: "center",
   },
 };
 

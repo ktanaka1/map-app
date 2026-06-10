@@ -1,15 +1,17 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { SocketProvider } from './hooks/useSocketContext';
-import TopPage from './pages/TopPage';
-import WaitingPage from './pages/WaitingPage';
-import KeywordPage from './pages/KeywordPage';
-import VotingPage from './pages/VotingPage';
-import ResultPage from './pages/ResultPage';
-import JoinPage from './pages/JoinPage';
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { SocketProvider } from "./hooks/useSocketContext";
+import ConnectionBanner from "./components/ConnectionBanner";
+import TopPage from "./pages/TopPage";
+import WaitingPage from "./pages/WaitingPage";
+import KeywordPage from "./pages/KeywordPage";
+import VotingPage from "./pages/VotingPage";
+import ResultPage from "./pages/ResultPage";
+import JoinPage from "./pages/JoinPage";
 
 function App() {
   return (
     <SocketProvider>
+      <ConnectionBanner />
       <BrowserRouter>
         <Routes>
           {/* ソロ／マルチ選択・セッション作成 */}
