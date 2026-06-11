@@ -9,9 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 技術スタック
 
 - **フロントエンド**: React + Vite（TypeScript）→ Vercel にデプロイ
-- **バックエンド**: Express + Socket.IO（TypeScript）→ Railway にデプロイ
-- **データベース**: PostgreSQL（Railway）
-- **ORM**: Prisma（`server/prisma/schema.prisma`）
+- **バックエンド**: Express + Socket.IO（TypeScript）→ デプロイ先検討中（旧Railway）
+- **データ管理**: インメモリ（MVP方針。セッションは24時間TTLの短命データのためDB不使用。`server/prisma/schema.prisma` は将来の履歴機能用ドラフトとして未使用のまま保管）
 - **外部API**: Google Places API（飲食店検索・クチコミ・GPS周辺検索）
 - **モノレポ管理**: npm workspaces（root `package.json`）
 
@@ -29,12 +28,11 @@ map-app/
 ├── server/          # Express + Socket.IO
 │   └── src/
 │       ├── routes/       # Express ルーティング
-│       ├── services/     # ビジネスロジック
-│       ├── repositories/ # DBアクセス（Prisma経由）
+│       ├── services/     # ビジネスロジック（セッションはインメモリ管理）
 │       ├── socket/       # Socket.IOイベントハンドラ
 │       └── types/        # 型定義
 │   └── prisma/
-│       └── schema.prisma
+│       └── schema.prisma # 未使用（将来の履歴機能用ドラフト）
 └── shared/          # フロント・バック共通の型定義
     └── types/
         ├── session.ts    # セッション・投票関連
@@ -70,19 +68,12 @@ npm run dev --workspace=client
 
 # バックエンド開発サーバー
 npm run dev --workspace=server
-
-# Prismaマイグレーション
-cd server && npx prisma migrate dev
-
-# Prismaクライアント生成
-cd server && npx prisma generate
 ```
 
 ## 環境変数
 
 ```bash
 # server/.env
-DATABASE_URL=postgresql://...
 GOOGLE_PLACES_API_KEY=...
 CLIENT_URL=http://localhost:5173   # CORS設定用
 

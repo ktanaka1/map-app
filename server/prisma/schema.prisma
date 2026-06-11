@@ -1,3 +1,8 @@
+// ⚠️ 現在このスキーマは未使用です（2026-06 /consult でMVPはインメモリ管理に確定）。
+// 将来の「過去に決めたお店の履歴保存」機能でDB永続化を再検討する際の
+// ドラフトとして残しています。利用時は prisma / @prisma/client の依存追加と
+// ビルドスクリプトへの prisma generate 再追加が必要です。
+//
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 

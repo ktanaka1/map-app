@@ -6,10 +6,9 @@
 - **言語**: TypeScript（フロント・バック統一）
 - **フロントエンド**: React + Vite
 - **バックエンド**: Express + Socket.IO
-- **データベース**: PostgreSQL
-- **ORM**: Prisma
+- **データ管理**: インメモリ（MVP方針・2026-06確定。セッションは24時間TTLの短命データのためDBを使わない。将来の履歴機能でPostgreSQL + Prismaを再検討、schema.prismaはドラフトとして保管）
 - **外部API**: Google Places API（飲食店検索・クチコミ取得）
-- **インフラ**: Vercel（フロント）+ Railway（バックエンド + DB）
+- **インフラ**: Vercel（フロント）+ バックエンドはデプロイ先検討中（旧Railway・無料期間終了）
 - **設計パターン**: モノリス（レイヤードアーキテクチャ）
 
 ## 選定理由
@@ -17,7 +16,7 @@
 - **TypeScript統一**: フロント・バックで型定義を共有し、リアルタイム通信のデータ構造の不整合を防止
 - **React + Vite**: SEO不要のSPAに最適。軽量・高速ビルドでMVPの開発速度を優先
 - **Express + Socket.IO**: WebSocketのルーム機能がセッション管理に直結。自動再接続で不安定な回線にも対応
-- **PostgreSQL + Prisma**: 投票データのリレーション管理に強い。スキーマから型自動生成で開発体験◎
+- **インメモリ管理**: セッション・投票は24時間で消える短命データであり、MVPでは速度優先でDBを持たない。サーバー再起動での消失は許容（将来の履歴機能でPostgreSQL + Prismaを再検討）
 - **Google Places API**: 周辺検索・クチコミ・評価をワンストップで提供。GPS連携が標準機能
 - **Vercel + Railway**: フロントはCDN配信で高速、バックエンドはWebSocket対応の常時稼働サーバー
 
@@ -42,13 +41,12 @@ map-app/
 ├── server/                    # Express + Socket.IO（バックエンド）
 │   ├── src/
 │   │   ├── routes/            # Express ルーティング
-│   │   ├── services/          # ビジネスロジック
-│   │   ├── repositories/      # DBアクセス（Prisma経由）
+│   │   ├── services/          # ビジネスロジック（セッションはインメモリ管理）
 │   │   ├── socket/            # Socket.IO イベントハンドラ
 │   │   ├── types/             # 型定義
 │   │   └── index.ts           # エントリーポイント
 │   ├── prisma/
-│   │   └── schema.prisma      # DBスキーマ定義
+│   │   └── schema.prisma      # 未使用（将来の履歴機能用ドラフト）
 │   ├── tsconfig.json
 │   └── package.json
 │
