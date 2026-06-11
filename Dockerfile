@@ -1,10 +1,32 @@
-FROM node:18-alpine
+# server（Express + Socket.IO）のデプロイ用イメージ。Koyeb / Fly.io 共用
+# ビルドコンテキストはリポジトリルート（npm workspaces のため shared/ が必要）
 
+# ── Build stage ──────────────────────────────────────────
+FROM node:22-alpine AS build
 WORKDIR /app
 
-COPY . .
-RUN npm ci
-RUN cd server && npx prisma generate
-RUN npm run build --workspace=server
+COPY package.json package-lock.json ./
+COPY server/package.json server/
+COPY client/package.json client/
+COPY shared/ shared/
+RUN npm ci -w server
 
-CMD cd server && npx prisma db push --accept-data-loss && node dist/index.js
+COPY server/tsconfig.json server/
+COPY server/src server/src
+RUN npm run build -w server
+
+# ── Runtime stage ────────────────────────────────────────
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+COPY server/package.json server/
+COPY client/package.json client/
+COPY shared/package.json shared/
+RUN npm ci -w server --omit=dev
+
+COPY --from=build /app/server/dist server/dist
+
+EXPOSE 3000
+CMD ["node", "server/dist/index.js"]

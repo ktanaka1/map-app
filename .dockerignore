@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+.env
+**/.env
+docs
+*.md
+
+# client はワークスペース解決用の package.json のみ必要
+client/*
+!client/package.json
