@@ -114,7 +114,7 @@ describe("judgeVotes", () => {
       expect(result.isFallback).toBe(true);
     });
 
-    it("全員が全候補を reject した場合（keep 票数が全て0）も先頭をフォールバックに選ぶ", () => {
+    it("全員が全候補を reject した場合（keep 票数が全て0）はフォールバックせず allRejected=true を返す", () => {
       const summaries: RestaurantVoteSummary[] = [
         makeSummary("r1", [
           { participantId: "p1", choice: "reject" },
@@ -129,8 +129,28 @@ describe("judgeVotes", () => {
       const result = judgeVotes(summaries, 2);
 
       expect(result.keptRestaurantIds).toEqual([]);
-      expect(result.fallbackRestaurantId).toBe("r1");
+      expect(result.fallbackRestaurantId).toBeNull();
+      expect(result.isFallback).toBe(false);
+      expect(result.allRejected).toBe(true);
+    });
+
+    it("キープ票が1票でもあれば allRejected にはならずフォールバックする", () => {
+      const summaries: RestaurantVoteSummary[] = [
+        makeSummary("r1", [
+          { participantId: "p1", choice: "reject" },
+          { participantId: "p2", choice: "reject" },
+        ]),
+        makeSummary("r2", [
+          { participantId: "p1", choice: "keep" },
+          { participantId: "p2", choice: "reject" },
+        ]),
+      ];
+
+      const result = judgeVotes(summaries, 2);
+
+      expect(result.fallbackRestaurantId).toBe("r2");
       expect(result.isFallback).toBe(true);
+      expect(result.allRejected).toBe(false);
     });
   });
 

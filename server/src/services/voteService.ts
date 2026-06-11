@@ -16,6 +16,8 @@ export interface RestaurantVoteSummary {
  *   2. キープが1件も無かった場合（全滅）はフォールバック:
  *      "keep" 票数が最多の飲食店を fallbackRestaurantId として返す
  *      （同数の場合は先頭のものを採用）
+ *   3. 全候補の "keep" 票数が0（全員が全店除外）の場合はフォールバックせず、
+ *      allRejected=true を返して再検索を促す
  *
  * @param summaries  各飲食店の投票集計リスト（全員分の投票が揃っていること）
  * @param totalParticipants  投票に参加した人数
@@ -30,6 +32,7 @@ export function judgeVotes(
       keptRestaurantIds: [],
       fallbackRestaurantId: null,
       isFallback: false,
+      allRejected: false,
     };
   }
 
@@ -49,6 +52,17 @@ export function judgeVotes(
       keptRestaurantIds,
       fallbackRestaurantId: null,
       isFallback: false,
+      allRejected: false,
+    };
+  }
+
+  // 全員が全候補を除外: 0票の店を「最も支持された」と偽らず、再検索を促す
+  if (keepCounts.every((r) => r.keepCount === 0)) {
+    return {
+      keptRestaurantIds: [],
+      fallbackRestaurantId: null,
+      isFallback: false,
+      allRejected: true,
     };
   }
 
@@ -60,6 +74,7 @@ export function judgeVotes(
     keptRestaurantIds: [],
     fallbackRestaurantId,
     isFallback: true,
+    allRejected: false,
   };
 }
 

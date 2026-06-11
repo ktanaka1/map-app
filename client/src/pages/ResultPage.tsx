@@ -47,7 +47,19 @@ function ResultPage() {
 
       {/* スクロール可能なコンテンツ */}
       <div style={styles.scrollArea}>
-        {votingResult.isFallback ? (
+        {votingResult.allRejected ? (
+          <div style={styles.section}>
+            <div style={styles.allRejectedBanner}>
+              <span style={styles.bannerEmoji}>×</span>
+              <div>
+                <p style={styles.allRejectedTitle}>全候補が除外されました</p>
+                <p style={styles.allRejectedSubtitle}>
+                  キーワードや場所、予算を変えてもう一度さがしてみましょう
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : votingResult.isFallback ? (
           <div style={styles.section}>
             <div style={styles.fallbackBanner}>
               <span style={styles.bannerEmoji}>!</span>
@@ -270,6 +282,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "14px",
+  },
+  allRejectedBanner: {
+    backgroundColor: "#fee2e2",
+    border: "1px solid #fca5a5",
+    borderRadius: "12px",
+    padding: "16px 20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+  },
+  allRejectedTitle: {
+    fontWeight: "bold",
+    fontSize: "0.95rem",
+    color: "#991b1b",
+    margin: "0 0 2px",
+  },
+  allRejectedSubtitle: {
+    color: "#991b1b",
+    fontSize: "0.82rem",
+    margin: 0,
   },
   successBanner: {
     backgroundColor: "#f0fff4",

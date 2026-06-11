@@ -158,6 +158,8 @@ export interface VotingResult {
   fallbackRestaurantId: string | null;
   /** フォールバックが使われたか */
   isFallback: boolean;
+  /** 全員が全候補を除外した（キープ票が1つもない）。再検索を促す */
+  allRejected: boolean;
 }
 export interface BaseResponse {
   success: boolean;
