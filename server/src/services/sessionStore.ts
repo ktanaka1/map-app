@@ -34,6 +34,8 @@ export interface InMemorySession {
   runoffVotes: Map<string, string>;
   /** 複数キープから1店に絞った最終決定 */
   finalDecision: FinalDecision | null;
+  /** rejoin 認証用トークン participantId -> token（本人にのみ返す） */
+  participantTokens: Map<string, string>;
 }
 
 const sessions = new Map<string, InMemorySession>();
@@ -105,6 +107,9 @@ export function createSession(
   const socketToParticipant = new Map<string, string>();
   socketToParticipant.set(socketId, hostId);
 
+  const participantTokens = new Map<string, string>();
+  participantTokens.set(hostId, uuidv4());
+
   const entry: InMemorySession = {
     session,
     restaurants: [],
@@ -113,6 +118,7 @@ export function createSession(
     result: null,
     runoffVotes: new Map(),
     finalDecision: null,
+    participantTokens,
   };
 
   sessions.set(sessionId, entry);
@@ -131,16 +137,20 @@ export function addParticipant(
   sessionId: string,
   name: string,
   socketId: string,
-): { entry: InMemorySession; participant: Participant } | { error: string } {
+):
+  | { entry: InMemorySession; participant: Participant; token: string }
+  | { error: string } {
   const entry = sessions.get(sessionId);
   if (!entry) return { error: "セッションが見つかりません" };
   if (entry.session.phase !== "waiting")
     return { error: "参加受付は終了しました" };
 
   const participant: Participant = { id: uuidv4(), name, isHost: false };
+  const token = uuidv4();
   entry.session.participants.push(participant);
   entry.socketToParticipant.set(socketId, participant.id);
-  return { entry, participant };
+  entry.participantTokens.set(participant.id, token);
+  return { entry, participant, token };
 }
 
 export function setPhase(
@@ -370,6 +380,7 @@ export function removeParticipantById(
   entry.session.participants = entry.session.participants.filter(
     (p) => p.id !== participantId,
   );
+  entry.participantTokens.delete(participantId);
 }
 
 export function removeParticipantBySocket(socketId: string):

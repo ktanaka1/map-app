@@ -238,6 +238,7 @@ export function registerSessionHandlers(
         sessionId: session.id,
         participant: host,
         session,
+        token: entry.participantTokens.get(host.id),
       });
 
       // 作成者自身に session_phase_changed を送信してフェーズを伝える
@@ -265,20 +266,20 @@ export function registerSessionHandlers(
         return;
       }
 
-      const { entry, participant } = result;
+      const { entry, participant, token } = result;
 
       socket.join(sessionId);
       console.log(
         `[Socket] join_session: session=${sessionId}, name=${participantName}`,
       );
 
-      // 全員に参加通知
+      // 全員に参加通知（トークンは本人への callback のみで返す）
       io.to(sessionId).emit("participant_joined", {
         participant,
         participants: entry.session.participants,
       });
 
-      callback({ success: true, session: entry.session, participant });
+      callback({ success: true, session: entry.session, participant, token });
     } catch (err) {
       console.error("[Socket] join_session error:", err);
       callback({ success: false, error: "Internal server error" });
@@ -776,11 +777,18 @@ export function registerSessionHandlers(
    * 新しいsocket.idでsocketToParticipantマップを更新し、ルームに再参加する。
    */
   socket.on("rejoin_session", (payload, callback) => {
-    const { sessionId, participantId } = payload;
+    const { sessionId, participantId, token } = payload;
     try {
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
+        return;
+      }
+
+      // participantId を知っているだけでは再参加できないようトークンを検証する
+      const expectedToken = entry.participantTokens.get(participantId);
+      if (!expectedToken || expectedToken !== token) {
+        callback({ success: false, error: "参加者情報が一致しません" });
         return;
       }
 

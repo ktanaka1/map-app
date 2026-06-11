@@ -5,7 +5,7 @@ import { useSocketContext } from "../hooks/useSocketContext";
 
 function TopPage() {
   const navigate = useNavigate();
-  const { createSession, state } = useSocketContext();
+  const { createSession } = useSocketContext();
   const [name, setName] = useState("");
   const [selectedMode, setSelectedMode] = useState<SessionMode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -115,7 +115,6 @@ function TopPage() {
 
           {endedMessage && <p style={styles.ended}>{endedMessage}</p>}
           {error && <p style={styles.error}>{error}</p>}
-          {state.error && <p style={styles.error}>{state.error}</p>}
         </div>
       </div>
 

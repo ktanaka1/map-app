@@ -21,6 +21,8 @@ export interface StoredSession {
   participantId: string;
   participantName: string;
   isHost: boolean;
+  /** rejoin 認証用トークン（join/create 時にサーバーが発行） */
+  token: string;
 }
 
 export function saveSessionToStorage(data: StoredSession): void {
@@ -72,7 +74,6 @@ export interface SessionState {
   runoffVotedCount: number;
   /** 複数キープから1店に絞った最終決定 */
   finalDecision: FinalDecision | null;
-  error: string | null;
 }
 
 export interface UseSocketReturn {
@@ -133,6 +134,7 @@ export interface UseSocketReturn {
   rejoinSession: (
     sessionId: string,
     participantId: string,
+    token: string,
     callback: (res: {
       success: boolean;
       error?: string;
@@ -177,7 +179,6 @@ const initialState: SessionState = {
   myRunoffVote: null,
   runoffVotedCount: 0,
   finalDecision: null,
-  error: null,
 };
 
 // シングルトンソケットインスタンス（ページをまたいで状態を保持）
@@ -235,7 +236,11 @@ export function useSocket(): UseSocketReturn {
 
       socket.emit(
         "rejoin_session",
-        { sessionId: stored.sessionId, participantId: stored.participantId },
+        {
+          sessionId: stored.sessionId,
+          participantId: stored.participantId,
+          token: stored.token ?? "",
+        },
         (res) => {
           setIsRejoining(false);
           if (res.success && res.session && res.participant) {
@@ -268,11 +273,6 @@ export function useSocket(): UseSocketReturn {
     const onDisconnect = (reason: string) => {
       console.log("[Socket] disconnected:", reason);
       setIsConnected(false);
-    };
-
-    const onError = (payload: { code: string; message: string }) => {
-      console.error("[Socket] error:", payload);
-      updateState({ error: payload.message });
     };
 
     const onParticipantJoined = (payload: {
@@ -420,7 +420,6 @@ export function useSocket(): UseSocketReturn {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    socket.on("error", onError);
     socket.on("participant_joined", onParticipantJoined);
     socket.on("participant_left", onParticipantLeft);
     socket.on("session_phase_changed", onSessionPhaseChanged);
@@ -437,7 +436,6 @@ export function useSocket(): UseSocketReturn {
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
-      socket.off("error", onError);
       socket.off("participant_joined", onParticipantJoined);
       socket.off("participant_left", onParticipantLeft);
       socket.off("session_phase_changed", onSessionPhaseChanged);
@@ -478,6 +476,7 @@ export function useSocket(): UseSocketReturn {
             participantId: res.participant.id,
             participantName: res.participant.name,
             isHost: res.participant.isHost,
+            token: res.token ?? "",
           });
         }
         callback(res);
@@ -513,6 +512,7 @@ export function useSocket(): UseSocketReturn {
               participantId: res.participant!.id,
               participantName: res.participant!.name,
               isHost: res.participant!.isHost,
+              token: res.token ?? "",
             });
           }
           callback(res);
@@ -604,6 +604,7 @@ export function useSocket(): UseSocketReturn {
     (
       sessionId: string,
       participantId: string,
+      token: string,
       callback: (res: {
         success: boolean;
         error?: string;
@@ -614,7 +615,7 @@ export function useSocket(): UseSocketReturn {
     ) => {
       socketRef.current.emit(
         "rejoin_session",
-        { sessionId, participantId },
+        { sessionId, participantId, token },
         (res) => {
           if (res.success && res.session && res.participant) {
             setState({

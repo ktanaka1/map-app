@@ -82,8 +82,6 @@ export interface ServerToClientEvents {
   }) => void;
   /** セッションが終了した */
   session_ended: (payload: { reason: SessionEndReason }) => void;
-  /** エラー通知 */
-  error: (payload: { code: string; message: string }) => void;
   /** 検索結果の飲食店一覧 */
   restaurants_found: (payload: {
     restaurants: import("./restaurant").Restaurant[];
@@ -148,6 +146,8 @@ export interface ClientToServerEvents {
     payload: {
       sessionId: string;
       participantId: string;
+      /** join/create 時に発行された参加者トークン（なりすまし防止） */
+      token: string;
     },
     callback: (response: RejoinSessionResponse) => void,
   ) => void;
@@ -235,6 +235,8 @@ export interface BaseResponse {
 export interface JoinSessionResponse extends BaseResponse {
   session?: Session;
   participant?: Participant;
+  /** rejoin 認証用の参加者トークン（本人にのみ返す） */
+  token?: string;
 }
 export interface RejoinSessionResponse extends BaseResponse {
   session?: Session;
@@ -257,5 +259,7 @@ export interface CreateSessionResponse extends BaseResponse {
   sessionId?: string;
   session?: Session;
   participant?: Participant;
+  /** rejoin 認証用の参加者トークン（本人にのみ返す） */
+  token?: string;
 }
 //# sourceMappingURL=session.d.ts.map
