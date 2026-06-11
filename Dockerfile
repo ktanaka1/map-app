@@ -1,4 +1,4 @@
-# server（Express + Socket.IO）のデプロイ用イメージ。Koyeb / Fly.io 共用
+# server（Express + Socket.IO）のデプロイ用イメージ。Hugging Face Spaces / Koyeb / Fly.io 共用
 # ビルドコンテキストはリポジトリルート（npm workspaces のため shared/ が必要）
 
 # ── Build stage ──────────────────────────────────────────
@@ -27,6 +27,9 @@ COPY shared/package.json shared/
 RUN npm ci -w server --omit=dev
 
 COPY --from=build /app/server/dist server/dist
+
+# Hugging Face Spaces は非rootユーザー（uid 1000）での実行を推奨。node:alpine の node ユーザーが uid 1000
+USER node
 
 EXPOSE 3000
 CMD ["node", "server/dist/index.js"]
