@@ -1,6 +1,11 @@
 import type { Restaurant } from "./restaurant";
 export type SessionMode = "solo" | "multi";
-export type SessionPhase = "waiting" | "keyword" | "voting" | "result";
+export type SessionPhase =
+  | "waiting"
+  | "keyword"
+  | "voting"
+  | "result"
+  | "runoff";
 export interface Participant {
   id: string;
   name: string;
@@ -59,6 +64,22 @@ export interface ServerToClientEvents {
   }) => void;
   /** 全員の投票が完了し、結果判定が行われた */
   voting_completed: (payload: { result: VotingResult }) => void;
+  /** 決選投票が開始された（複数キープ時、ホスト操作） */
+  runoff_started: (payload: {
+    restaurantIds: string[];
+    session: Session;
+  }) => void;
+  /** 決選投票の1票が送信された（選択内容は秘匿） */
+  runoff_vote_submitted: (payload: {
+    participantId: string;
+    votedCount: number;
+    totalCount: number;
+  }) => void;
+  /** 最終決定が確定した */
+  final_decision: (payload: {
+    decision: FinalDecision;
+    session: Session;
+  }) => void;
   /** セッションが終了した */
   session_ended: (payload: { reason: SessionEndReason }) => void;
   /** エラー通知 */
@@ -137,6 +158,36 @@ export interface ClientToServerEvents {
     },
     callback: (response: BaseResponse) => void,
   ) => void;
+  /** 複数キープ時、評価順1位で決定する（ホストのみ） */
+  decide_by_rating: (
+    payload: {
+      sessionId: string;
+    },
+    callback: (response: BaseResponse) => void,
+  ) => void;
+  /** 複数キープ時、決選投票を開始する（マルチのホストのみ） */
+  start_runoff: (
+    payload: {
+      sessionId: string;
+    },
+    callback: (response: BaseResponse) => void,
+  ) => void;
+  /** 決選投票の1票を送信する（全員投票で自動確定） */
+  submit_runoff_vote: (
+    payload: {
+      sessionId: string;
+      restaurantId: string;
+    },
+    callback: (response: BaseResponse) => void,
+  ) => void;
+  /** ソロモードで複数キープから1店を選んで決定する */
+  decide_pick: (
+    payload: {
+      sessionId: string;
+      restaurantId: string;
+    },
+    callback: (response: BaseResponse) => void,
+  ) => void;
   /** セッションを作成する（ホストのみ） */
   create_session: (
     payload: {
@@ -161,6 +212,22 @@ export interface VotingResult {
   /** 全員が全候補を除外した（キープ票が1つもない）。再検索を促す */
   allRejected: boolean;
 }
+/** 複数キープ時に1店へ絞り込んだ最終決定 */
+export interface FinalDecision {
+  /** 決定した飲食店ID */
+  restaurantId: string;
+  /**
+   * 決定方法
+   * - rating: ホストが評価順1位で決定
+   * - runoff: 決選投票（同数時は評価順タイブレーク）
+   * - pick: ソロモードで自分で選択
+   */
+  method: "rating" | "runoff" | "pick";
+  /** 決選投票の同数を評価順で解決したか */
+  tieBroken: boolean;
+  /** 次点（決定店以外のキープ店） */
+  runnersUpIds: string[];
+}
 export interface BaseResponse {
   success: boolean;
   error?: string;
@@ -179,6 +246,12 @@ export interface RejoinSessionResponse extends BaseResponse {
   participantVoteCounts?: Record<string, number>;
   /** 判定済みの場合の投票結果（結果フェーズの復元用） */
   votingResult?: VotingResult | null;
+  /** 決選投票で自分が入れた票（未投票なら null） */
+  myRunoffVote?: string | null;
+  /** 決選投票の投票済み人数 */
+  runoffVotedCount?: number;
+  /** 確定済みの最終決定 */
+  finalDecision?: FinalDecision | null;
 }
 export interface CreateSessionResponse extends BaseResponse {
   sessionId?: string;

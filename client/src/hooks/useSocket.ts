@@ -6,6 +6,7 @@ import type {
   Session,
   Participant,
   VotingResult,
+  FinalDecision,
 } from "shared/types";
 import type { Restaurant } from "shared/types";
 
@@ -65,6 +66,12 @@ export interface SessionState {
   voteProgress: Map<string, number>;
   /** 参加者ごとの累計投票数 participantId -> voteCount */
   participantVoteCounts: Map<string, number>;
+  /** 決選投票で自分が入れた票（未投票なら null） */
+  myRunoffVote: string | null;
+  /** 決選投票の投票済み人数 */
+  runoffVotedCount: number;
+  /** 複数キープから1店に絞った最終決定 */
+  finalDecision: FinalDecision | null;
   error: string | null;
 }
 
@@ -138,6 +145,24 @@ export interface UseSocketReturn {
     sessionId: string,
     callback?: (res: { success: boolean; error?: string }) => void,
   ) => void;
+  decideByRating: (
+    sessionId: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
+  startRunoff: (
+    sessionId: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
+  submitRunoffVote: (
+    sessionId: string,
+    restaurantId: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
+  decidePick: (
+    sessionId: string,
+    restaurantId: string,
+    callback: (res: { success: boolean; error?: string }) => void,
+  ) => void;
 }
 
 const initialState: SessionState = {
@@ -149,6 +174,9 @@ const initialState: SessionState = {
   votedRestaurantIds: new Set(),
   voteProgress: new Map(),
   participantVoteCounts: new Map(),
+  myRunoffVote: null,
+  runoffVotedCount: 0,
+  finalDecision: null,
   error: null,
 };
 
@@ -224,6 +252,9 @@ export function useSocket(): UseSocketReturn {
                 Object.entries(res.participantVoteCounts ?? {}),
               ),
               votingResult: res.votingResult ?? null,
+              myRunoffVote: res.myRunoffVote ?? null,
+              runoffVotedCount: res.runoffVotedCount ?? 0,
+              finalDecision: res.finalDecision ?? null,
             });
           } else {
             console.warn("[Socket] rejoin_session 失敗:", res.error);
@@ -333,6 +364,39 @@ export function useSocket(): UseSocketReturn {
       updateState({ votingResult: payload.result });
     };
 
+    const onRunoffStarted = (payload: {
+      restaurantIds: string[];
+      session: Session;
+    }) => {
+      setState((prev) => ({
+        ...prev,
+        session: payload.session,
+        participants: payload.session.participants,
+        myRunoffVote: null,
+        runoffVotedCount: 0,
+      }));
+    };
+
+    const onRunoffVoteSubmitted = (payload: {
+      participantId: string;
+      votedCount: number;
+      totalCount: number;
+    }) => {
+      updateState({ runoffVotedCount: payload.votedCount });
+    };
+
+    const onFinalDecision = (payload: {
+      decision: FinalDecision;
+      session: Session;
+    }) => {
+      setState((prev) => ({
+        ...prev,
+        finalDecision: payload.decision,
+        session: payload.session,
+        participants: payload.session.participants,
+      }));
+    };
+
     const onSessionEnded = (payload: { reason: string }) => {
       console.log("[Socket] session_ended:", payload.reason);
       clearSessionFromStorage();
@@ -364,6 +428,9 @@ export function useSocket(): UseSocketReturn {
     socket.on("keyword_removed", onKeywordRemoved);
     socket.on("vote_submitted", onVoteSubmitted);
     socket.on("voting_completed", onVotingCompleted);
+    socket.on("runoff_started", onRunoffStarted);
+    socket.on("runoff_vote_submitted", onRunoffVoteSubmitted);
+    socket.on("final_decision", onFinalDecision);
     socket.on("session_ended", onSessionEnded);
     socket.on("restaurants_found", onRestaurantsFound);
 
@@ -378,6 +445,9 @@ export function useSocket(): UseSocketReturn {
       socket.off("keyword_removed", onKeywordRemoved);
       socket.off("vote_submitted", onVoteSubmitted);
       socket.off("voting_completed", onVotingCompleted);
+      socket.off("runoff_started", onRunoffStarted);
+      socket.off("runoff_vote_submitted", onRunoffVoteSubmitted);
+      socket.off("final_decision", onFinalDecision);
       socket.off("session_ended", onSessionEnded);
       socket.off("restaurants_found", onRestaurantsFound);
     };
@@ -558,6 +628,9 @@ export function useSocket(): UseSocketReturn {
                 Object.entries(res.participantVoteCounts ?? {}),
               ),
               votingResult: res.votingResult ?? null,
+              myRunoffVote: res.myRunoffVote ?? null,
+              runoffVotedCount: res.runoffVotedCount ?? 0,
+              finalDecision: res.finalDecision ?? null,
             });
           }
           callback(res);
@@ -580,6 +653,61 @@ export function useSocket(): UseSocketReturn {
     [],
   );
 
+  const decideByRating = useCallback(
+    (
+      sessionId: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit("decide_by_rating", { sessionId }, callback);
+    },
+    [],
+  );
+
+  const startRunoff = useCallback(
+    (
+      sessionId: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit("start_runoff", { sessionId }, callback);
+    },
+    [],
+  );
+
+  const submitRunoffVote = useCallback(
+    (
+      sessionId: string,
+      restaurantId: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit(
+        "submit_runoff_vote",
+        { sessionId, restaurantId },
+        (res) => {
+          if (res.success) {
+            setState((prev) => ({ ...prev, myRunoffVote: restaurantId }));
+          }
+          callback(res);
+        },
+      );
+    },
+    [],
+  );
+
+  const decidePick = useCallback(
+    (
+      sessionId: string,
+      restaurantId: string,
+      callback: (res: { success: boolean; error?: string }) => void,
+    ) => {
+      socketRef.current.emit(
+        "decide_pick",
+        { sessionId, restaurantId },
+        callback,
+      );
+    },
+    [],
+  );
+
   return {
     socket: socketRef.current,
     state,
@@ -594,5 +722,9 @@ export function useSocket(): UseSocketReturn {
     submitVote,
     rejoinSession,
     leaveSession,
+    decideByRating,
+    startRunoff,
+    submitRunoffVote,
+    decidePick,
   };
 }

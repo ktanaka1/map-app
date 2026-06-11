@@ -6,6 +6,7 @@ import type {
   SessionPhase,
   VoteChoice,
   VotingResult,
+  FinalDecision,
 } from "shared/types";
 import type { Restaurant } from "shared/types";
 import type { RestaurantVoteSummary } from "./voteService";
@@ -29,6 +30,10 @@ export interface InMemorySession {
   socketToParticipant: Map<string, string>;
   /** 判定済みの投票結果（リジョイン時の復元用） */
   result: VotingResult | null;
+  /** 決選投票の票 participantId -> restaurantId */
+  runoffVotes: Map<string, string>;
+  /** 複数キープから1店に絞った最終決定 */
+  finalDecision: FinalDecision | null;
 }
 
 const sessions = new Map<string, InMemorySession>();
@@ -106,6 +111,8 @@ export function createSession(
     votes: new Map(),
     socketToParticipant,
     result: null,
+    runoffVotes: new Map(),
+    finalDecision: null,
   };
 
   sessions.set(sessionId, entry);
@@ -214,9 +221,29 @@ export function setResult(sessionId: string, result: VotingResult): void {
   entry.result = result;
 }
 
+export function setFinalDecision(
+  sessionId: string,
+  decision: FinalDecision,
+): void {
+  const entry = sessions.get(sessionId);
+  if (!entry) return;
+  entry.finalDecision = decision;
+}
+
+/** 決選投票の1票を記録する（再投票は上書き） */
+export function recordRunoffVote(
+  sessionId: string,
+  participantId: string,
+  restaurantId: string,
+): void {
+  const entry = sessions.get(sessionId);
+  if (!entry) return;
+  entry.runoffVotes.set(participantId, restaurantId);
+}
+
 /**
- * 離脱した参加者の投票をすべて削除する。
- * 残しておくと isVotingComplete の「票数 === 参加者数」判定が永遠に成立しなくなる。
+ * 離脱した参加者の投票（通常投票・決選投票とも）をすべて削除する。
+ * 残しておくと「票数 === 参加者数」の完了判定が永遠に成立しなくなる。
  */
 export function purgeVotesByParticipant(
   sessionId: string,
@@ -230,6 +257,7 @@ export function purgeVotesByParticipant(
       votes.filter((v) => v.participantId !== participantId),
     );
   }
+  entry.runoffVotes.delete(participantId);
 }
 
 /** 参加者ごとの累計投票数を集計する（リジョイン時の進捗復元用） */

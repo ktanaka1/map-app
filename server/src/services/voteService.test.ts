@@ -1,6 +1,9 @@
+import type { Restaurant } from "shared/types";
 import {
   judgeVotes,
   isVotingComplete,
+  judgeRunoff,
+  sortByRating,
   RestaurantVoteSummary,
 } from "./voteService";
 
@@ -162,6 +165,83 @@ describe("judgeVotes", () => {
       expect(result.fallbackRestaurantId).toBeNull();
       expect(result.isFallback).toBe(false);
     });
+  });
+});
+
+// 決選投票テスト用ヘルパー
+function makeRestaurant(
+  id: string,
+  rating: number,
+  reviewCount: number,
+): Restaurant {
+  return { id, rating, reviewCount } as unknown as Restaurant;
+}
+
+describe("sortByRating", () => {
+  it("rating 降順、同点なら reviewCount 降順に並べる", () => {
+    const sorted = sortByRating([
+      makeRestaurant("r1", 4.0, 100),
+      makeRestaurant("r2", 4.5, 10),
+      makeRestaurant("r3", 4.5, 200),
+    ]);
+    expect(sorted.map((r) => r.id)).toEqual(["r3", "r2", "r1"]);
+  });
+
+  it("元の配列を破壊しない", () => {
+    const original = [
+      makeRestaurant("r1", 3.0, 1),
+      makeRestaurant("r2", 5.0, 1),
+    ];
+    sortByRating(original);
+    expect(original.map((r) => r.id)).toEqual(["r1", "r2"]);
+  });
+});
+
+describe("judgeRunoff", () => {
+  const candidates = [
+    makeRestaurant("r1", 3.5, 50),
+    makeRestaurant("r2", 4.2, 80),
+    makeRestaurant("r3", 4.2, 30),
+  ];
+
+  it("最多得票の店が勝者になる", () => {
+    const votes = new Map([
+      ["p1", "r1"],
+      ["p2", "r1"],
+      ["p3", "r2"],
+    ]);
+    const outcome = judgeRunoff(votes, candidates);
+    expect(outcome.winnerRestaurantId).toBe("r1");
+    expect(outcome.tieBroken).toBe(false);
+  });
+
+  it("同数の場合は評価順（rating→reviewCount）でタイブレークする", () => {
+    const votes = new Map([
+      ["p1", "r1"],
+      ["p2", "r2"],
+    ]);
+    const outcome = judgeRunoff(votes, candidates);
+    // r1(3.5) vs r2(4.2) → r2 が勝者
+    expect(outcome.winnerRestaurantId).toBe("r2");
+    expect(outcome.tieBroken).toBe(true);
+  });
+
+  it("rating まで同点なら reviewCount で決まる", () => {
+    const votes = new Map([
+      ["p1", "r2"],
+      ["p2", "r3"],
+    ]);
+    const outcome = judgeRunoff(votes, candidates);
+    // r2(4.2, 80) vs r3(4.2, 30) → r2
+    expect(outcome.winnerRestaurantId).toBe("r2");
+    expect(outcome.tieBroken).toBe(true);
+  });
+
+  it("1人だけの投票（離脱で残り1人になった場合）でも判定できる", () => {
+    const votes = new Map([["p1", "r3"]]);
+    const outcome = judgeRunoff(votes, candidates);
+    expect(outcome.winnerRestaurantId).toBe("r3");
+    expect(outcome.tieBroken).toBe(false);
   });
 });
 

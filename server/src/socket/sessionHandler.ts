@@ -1,5 +1,9 @@
 import type { Server, Socket } from "socket.io";
-import type { ClientToServerEvents, ServerToClientEvents } from "shared/types";
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  FinalDecision,
+} from "shared/types";
 import {
   createSession,
   getSession,
@@ -10,7 +14,9 @@ import {
   removeKeyword,
   setRestaurants,
   setResult,
+  setFinalDecision,
   recordVote,
+  recordRunoffVote,
   buildVoteSummaries,
   purgeVotesByParticipant,
   countVotesByParticipant,
@@ -21,8 +27,14 @@ import {
   updateSocketMapping,
   scheduleDisconnect,
   cancelDisconnect,
+  type InMemorySession,
 } from "../services/sessionStore";
-import { judgeVotes, isVotingComplete } from "../services/voteService";
+import {
+  judgeVotes,
+  isVotingComplete,
+  judgeRunoff,
+  sortByRating,
+} from "../services/voteService";
 import { generateDummyRestaurants } from "../services/dummyRestaurants";
 import { searchRestaurants } from "../services/placesService";
 
@@ -64,6 +76,46 @@ function finalizeVotingIfComplete(io: AppServer, sessionId: string): boolean {
   });
   console.log(
     `[Socket] voting_completed: session=${sessionId}, isFallback=${result.isFallback}`,
+  );
+  return true;
+}
+
+/** 投票結果のキープ店一覧を返す（result 確定後のフェーズで使用） */
+function getKeptRestaurants(entry: InMemorySession) {
+  const ids = entry.result?.keptRestaurantIds ?? [];
+  return entry.restaurants.filter((r) => ids.includes(r.id));
+}
+
+/**
+ * 決選投票が全員分揃っていれば判定して最終決定を通知する。
+ * submit_runoff_vote 時と、決選投票中の参加者離脱時の両方から呼ぶ。
+ */
+function finalizeRunoffIfComplete(io: AppServer, sessionId: string): boolean {
+  const entry = getSession(sessionId);
+  if (!entry || entry.session.phase !== "runoff") return false;
+  if (entry.runoffVotes.size < entry.session.participants.length) return false;
+
+  const candidates = getKeptRestaurants(entry);
+  const outcome = judgeRunoff(entry.runoffVotes, candidates);
+  const decision: FinalDecision = {
+    restaurantId: outcome.winnerRestaurantId,
+    method: "runoff",
+    tieBroken: outcome.tieBroken,
+    runnersUpIds: candidates
+      .map((c) => c.id)
+      .filter((id) => id !== outcome.winnerRestaurantId),
+  };
+  setFinalDecision(sessionId, decision);
+
+  const updated = setPhase(sessionId, "result");
+  if (!updated) return false;
+
+  io.to(sessionId).emit("final_decision", {
+    decision,
+    session: updated.session,
+  });
+  console.log(
+    `[Socket] final_decision (runoff): session=${sessionId}, winner=${decision.restaurantId}, tieBroken=${decision.tieBroken}`,
   );
   return true;
 }
@@ -124,8 +176,12 @@ function removeAndReconcile(
     return;
   }
 
-  // 投票中の離脱: 残った参加者だけで全員分揃った可能性があるため再判定する
-  finalizeVotingIfComplete(io, sessionId);
+  // 投票中・決選投票中の離脱: 残った参加者だけで全員分揃った可能性があるため再判定する
+  if (session.phase === "runoff") {
+    finalizeRunoffIfComplete(io, sessionId);
+  } else {
+    finalizeVotingIfComplete(io, sessionId);
+  }
 }
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -495,6 +551,227 @@ export function registerSessionHandlers(
   });
 
   /**
+   * 複数キープ時: 評価順1位で決定（ホストのみ）
+   */
+  socket.on("decide_by_rating", (payload, callback) => {
+    const { sessionId } = payload;
+    try {
+      const entry = getSession(sessionId);
+      if (!entry) {
+        callback({ success: false, error: "セッションが見つかりません" });
+        return;
+      }
+
+      const participantId = entry.socketToParticipant.get(socket.id);
+      if (participantId !== entry.session.hostId) {
+        callback({ success: false, error: "ホストのみが操作できます" });
+        return;
+      }
+
+      if (entry.session.phase !== "result" || entry.finalDecision) {
+        callback({ success: false, error: "いまは決定操作ができません" });
+        return;
+      }
+
+      const kept = getKeptRestaurants(entry);
+      if (kept.length < 2) {
+        callback({ success: false, error: "絞り込みの対象がありません" });
+        return;
+      }
+
+      const sorted = sortByRating(kept);
+      const decision: FinalDecision = {
+        restaurantId: sorted[0].id,
+        method: "rating",
+        tieBroken: false,
+        runnersUpIds: sorted.slice(1).map((r) => r.id),
+      };
+      setFinalDecision(sessionId, decision);
+
+      console.log(
+        `[Socket] decide_by_rating: session=${sessionId}, winner=${decision.restaurantId}`,
+      );
+
+      io.to(sessionId).emit("final_decision", {
+        decision,
+        session: entry.session,
+      });
+      callback({ success: true });
+    } catch (err) {
+      console.error("[Socket] decide_by_rating error:", err);
+      callback({ success: false, error: "Internal server error" });
+    }
+  });
+
+  /**
+   * 複数キープ時: 決選投票を開始（マルチのホストのみ）
+   */
+  socket.on("start_runoff", (payload, callback) => {
+    const { sessionId } = payload;
+    try {
+      const entry = getSession(sessionId);
+      if (!entry) {
+        callback({ success: false, error: "セッションが見つかりません" });
+        return;
+      }
+
+      const participantId = entry.socketToParticipant.get(socket.id);
+      if (participantId !== entry.session.hostId) {
+        callback({ success: false, error: "ホストのみが操作できます" });
+        return;
+      }
+
+      if (entry.session.mode !== "multi") {
+        callback({
+          success: false,
+          error: "ソロモードでは一覧から直接選んでください",
+        });
+        return;
+      }
+
+      if (entry.session.phase !== "result" || entry.finalDecision) {
+        callback({ success: false, error: "いまは決定操作ができません" });
+        return;
+      }
+
+      const kept = getKeptRestaurants(entry);
+      if (kept.length < 2) {
+        callback({ success: false, error: "絞り込みの対象がありません" });
+        return;
+      }
+
+      entry.runoffVotes.clear();
+      const updated = setPhase(sessionId, "runoff");
+      if (!updated) {
+        callback({ success: false, error: "セッション更新に失敗しました" });
+        return;
+      }
+
+      console.log(
+        `[Socket] start_runoff: session=${sessionId}, candidates=${kept.length}`,
+      );
+
+      io.to(sessionId).emit("runoff_started", {
+        restaurantIds: kept.map((r) => r.id),
+        session: updated.session,
+      });
+      callback({ success: true });
+    } catch (err) {
+      console.error("[Socket] start_runoff error:", err);
+      callback({ success: false, error: "Internal server error" });
+    }
+  });
+
+  /**
+   * 決選投票の1票を送信（全員分揃ったら自動確定）
+   */
+  socket.on("submit_runoff_vote", (payload, callback) => {
+    const { sessionId, restaurantId } = payload;
+    try {
+      const entry = getSession(sessionId);
+      if (!entry) {
+        callback({ success: false, error: "セッションが見つかりません" });
+        return;
+      }
+
+      const participantId = entry.socketToParticipant.get(socket.id);
+      if (!participantId) {
+        callback({ success: false, error: "参加者として認識されていません" });
+        return;
+      }
+
+      if (entry.session.phase !== "runoff") {
+        callback({ success: false, error: "決選投票は行われていません" });
+        return;
+      }
+
+      const keptIds = entry.result?.keptRestaurantIds ?? [];
+      if (!keptIds.includes(restaurantId)) {
+        callback({ success: false, error: "投票対象が見つかりません" });
+        return;
+      }
+
+      recordRunoffVote(sessionId, participantId, restaurantId);
+
+      io.to(sessionId).emit("runoff_vote_submitted", {
+        participantId,
+        votedCount: entry.runoffVotes.size,
+        totalCount: entry.session.participants.length,
+      });
+
+      console.log(
+        `[Socket] submit_runoff_vote: session=${sessionId}, voted=${entry.runoffVotes.size}/${entry.session.participants.length}`,
+      );
+
+      finalizeRunoffIfComplete(io, sessionId);
+      callback({ success: true });
+    } catch (err) {
+      console.error("[Socket] submit_runoff_vote error:", err);
+      callback({ success: false, error: "Internal server error" });
+    }
+  });
+
+  /**
+   * ソロモード: 複数キープの一覧から1店を選んで決定
+   */
+  socket.on("decide_pick", (payload, callback) => {
+    const { sessionId, restaurantId } = payload;
+    try {
+      const entry = getSession(sessionId);
+      if (!entry) {
+        callback({ success: false, error: "セッションが見つかりません" });
+        return;
+      }
+
+      const participantId = entry.socketToParticipant.get(socket.id);
+      if (participantId !== entry.session.hostId) {
+        callback({ success: false, error: "ホストのみが操作できます" });
+        return;
+      }
+
+      if (entry.session.mode !== "solo") {
+        callback({
+          success: false,
+          error: "マルチセッションでは決め方を選んでください",
+        });
+        return;
+      }
+
+      if (entry.session.phase !== "result" || entry.finalDecision) {
+        callback({ success: false, error: "いまは決定操作ができません" });
+        return;
+      }
+
+      const keptIds = entry.result?.keptRestaurantIds ?? [];
+      if (!keptIds.includes(restaurantId)) {
+        callback({ success: false, error: "決定対象が見つかりません" });
+        return;
+      }
+
+      const decision: FinalDecision = {
+        restaurantId,
+        method: "pick",
+        tieBroken: false,
+        runnersUpIds: keptIds.filter((id) => id !== restaurantId),
+      };
+      setFinalDecision(sessionId, decision);
+
+      console.log(
+        `[Socket] decide_pick: session=${sessionId}, winner=${restaurantId}`,
+      );
+
+      io.to(sessionId).emit("final_decision", {
+        decision,
+        session: entry.session,
+      });
+      callback({ success: true });
+    } catch (err) {
+      console.error("[Socket] decide_pick error:", err);
+      callback({ success: false, error: "Internal server error" });
+    }
+  });
+
+  /**
    * ページリロード後のセッション再参加
    * 新しいsocket.idでsocketToParticipantマップを更新し、ルームに再参加する。
    */
@@ -538,6 +815,9 @@ export function registerSessionHandlers(
         votedRestaurantIds: getVotedRestaurantIds(updated, participantId),
         participantVoteCounts: countVotesByParticipant(updated),
         votingResult: updated.result,
+        myRunoffVote: updated.runoffVotes.get(participantId) ?? null,
+        runoffVotedCount: updated.runoffVotes.size,
+        finalDecision: updated.finalDecision,
       });
     } catch (err) {
       console.error("[Socket] rejoin_session error:", err);

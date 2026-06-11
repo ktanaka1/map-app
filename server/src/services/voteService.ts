@@ -1,4 +1,5 @@
 import type { VoteChoice, VotingResult } from "shared/types";
+import type { Restaurant } from "shared/types";
 
 /**
  * 1つの飲食店の投票集計
@@ -93,4 +94,54 @@ export function isVotingComplete(
 ): boolean {
   if (summaries.length !== totalRestaurants) return false;
   return summaries.every((s) => s.votes.length === totalParticipants);
+}
+
+/**
+ * 評価順（rating 降順、同点は reviewCount 降順）に並べ替える（純粋関数）
+ * 複数キープ時の「評価順で決定」と決選投票の同数タイブレークに使う。
+ */
+export function sortByRating(restaurants: Restaurant[]): Restaurant[] {
+  return [...restaurants].sort(
+    (a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount,
+  );
+}
+
+/** 決選投票の判定結果 */
+export interface RunoffOutcome {
+  winnerRestaurantId: string;
+  /** 最多得票が同数で、評価順タイブレークを使ったか */
+  tieBroken: boolean;
+}
+
+/**
+ * 決選投票の判定ロジック（純粋関数）
+ *
+ * ルール:
+ *   1. 1人1票。最多得票の飲食店が決定
+ *   2. 最多得票が同数の場合は、同数の店の中から評価順
+ *      （rating 降順、同点は reviewCount 降順）で1位を採用する
+ *
+ * @param votes  participantId -> restaurantId の投票（全員分揃っていること）
+ * @param candidates  決選投票の候補（キープされた飲食店）
+ */
+export function judgeRunoff(
+  votes: ReadonlyMap<string, string>,
+  candidates: Restaurant[],
+): RunoffOutcome {
+  const counts = new Map<string, number>();
+  for (const restaurantId of votes.values()) {
+    counts.set(restaurantId, (counts.get(restaurantId) ?? 0) + 1);
+  }
+
+  const maxCount = Math.max(...candidates.map((c) => counts.get(c.id) ?? 0));
+  const topCandidates = candidates.filter(
+    (c) => (counts.get(c.id) ?? 0) === maxCount,
+  );
+
+  if (topCandidates.length === 1) {
+    return { winnerRestaurantId: topCandidates[0].id, tieBroken: false };
+  }
+
+  const winner = sortByRating(topCandidates)[0];
+  return { winnerRestaurantId: winner.id, tieBroken: true };
 }

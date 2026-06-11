@@ -7,8 +7,24 @@ import RejoiningOverlay from "../components/RejoiningOverlay";
 function ResultPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, isRejoining, leaveSession } = useSocketContext();
-  const { votingResult, restaurants } = state;
+  const {
+    state,
+    isRejoining,
+    leaveSession,
+    decideByRating,
+    startRunoff,
+    submitRunoffVote,
+    decidePick,
+  } = useSocketContext();
+  const {
+    votingResult,
+    restaurants,
+    session,
+    me,
+    finalDecision,
+    myRunoffVote,
+    runoffVotedCount,
+  } = state;
 
   if (isRejoining) return <RejoiningOverlay />;
 
@@ -34,6 +50,62 @@ function ResultPage() {
     votingResult.fallbackRestaurantId !== null
       ? getRestaurantById(votingResult.fallbackRestaurantId)
       : null;
+
+  const isHost = me?.isHost ?? false;
+  const isSolo = session?.mode === "solo";
+  const isRunoff = session?.phase === "runoff";
+  const totalParticipants = session?.participants.length ?? 0;
+
+  // 決定店: 最終決定があればその店、キープ1件ならその店
+  const decidedRestaurant = finalDecision
+    ? getRestaurantById(finalDecision.restaurantId)
+    : keptRestaurants.length === 1
+      ? keptRestaurants[0]
+      : null;
+
+  const runnersUp = finalDecision
+    ? finalDecision.runnersUpIds
+        .map((id) => getRestaurantById(id))
+        .filter((r): r is Restaurant => r !== undefined)
+    : [];
+
+  const decisionLabel = !finalDecision
+    ? "全員一致で決定！"
+    : finalDecision.method === "rating"
+      ? "評価1位のお店に決定！"
+      : finalDecision.method === "pick"
+        ? "あなたが選んだお店に決定！"
+        : finalDecision.tieBroken
+          ? "決選投票で決定！（同数のため評価順で採用）"
+          : "決選投票で決定！";
+
+  const handleDecideByRating = () => {
+    if (!sessionId) return;
+    decideByRating(sessionId, (res) => {
+      if (!res.success) alert(res.error ?? "決定に失敗しました");
+    });
+  };
+
+  const handleStartRunoff = () => {
+    if (!sessionId) return;
+    startRunoff(sessionId, (res) => {
+      if (!res.success) alert(res.error ?? "決選投票を開始できませんでした");
+    });
+  };
+
+  const handleRunoffVote = (restaurantId: string) => {
+    if (!sessionId) return;
+    submitRunoffVote(sessionId, restaurantId, (res) => {
+      if (!res.success) alert(res.error ?? "投票に失敗しました");
+    });
+  };
+
+  const handlePick = (restaurantId: string) => {
+    if (!sessionId) return;
+    decidePick(sessionId, restaurantId, (res) => {
+      if (!res.success) alert(res.error ?? "決定に失敗しました");
+    });
+  };
 
   return (
     <div style={styles.pageWrapper}>
@@ -75,17 +147,112 @@ function ResultPage() {
                 <RestaurantCard restaurant={fallbackRestaurant} highlight />
               )}
           </div>
-        ) : (
+        ) : decidedRestaurant ? (
+          /* 決定済み（キープ1件 or 絞り込み完了） */
           <div style={styles.section}>
             <div style={styles.successBanner}>
               <span style={styles.bannerEmoji}>OK</span>
               <div>
-                <p style={styles.successTitle}>全員一致でキープされたお店</p>
-                <p style={styles.successCount}>{keptRestaurants.length}件</p>
+                <p style={styles.successTitle}>{decisionLabel}</p>
+                <p style={styles.successSubtitle}>このお店に決まりました</p>
+              </div>
+            </div>
+            <RestaurantCard restaurant={decidedRestaurant} highlight />
+            {runnersUp.length > 0 && (
+              <>
+                <p style={styles.runnersUpLabel}>次点（全員一致だったお店）</p>
+                {runnersUp.map((r) => (
+                  <RestaurantCard key={r.id} restaurant={r} />
+                ))}
+              </>
+            )}
+          </div>
+        ) : isRunoff ? (
+          /* 決選投票中 */
+          <div style={styles.section}>
+            <div style={styles.runoffBanner}>
+              <span style={styles.bannerEmoji}>VS</span>
+              <div>
+                <p style={styles.runoffTitle}>決選投票</p>
+                <p style={styles.runoffSubtitle}>
+                  行きたいお店を1つ選んでください（{runoffVotedCount} /{" "}
+                  {totalParticipants}人投票済み）
+                </p>
               </div>
             </div>
             {keptRestaurants.map((r) => (
-              <RestaurantCard key={r.id} restaurant={r} />
+              <div key={r.id}>
+                <RestaurantCard restaurant={r} />
+                <button
+                  type="button"
+                  onClick={() => handleRunoffVote(r.id)}
+                  style={
+                    myRunoffVote === r.id
+                      ? styles.runoffVotedButton
+                      : styles.runoffVoteButton
+                  }
+                >
+                  {myRunoffVote === r.id
+                    ? "✓ このお店に投票済み"
+                    : "このお店に投票する"}
+                </button>
+              </div>
+            ))}
+            {myRunoffVote !== null && (
+              <p style={styles.runoffHint}>
+                全員の投票が揃うと自動で決定します（投票は変更できます）
+              </p>
+            )}
+          </div>
+        ) : (
+          /* 複数キープ・未決定: 決め方の選択 */
+          <div style={styles.section}>
+            <div style={styles.successBanner}>
+              <span style={styles.bannerEmoji}>OK</span>
+              <div>
+                <p style={styles.successTitle}>
+                  {keptRestaurants.length}件のお店が全員一致！
+                </p>
+                <p style={styles.successSubtitle}>
+                  {isSolo
+                    ? "行きたいお店を1つ選んでください"
+                    : isHost
+                      ? "1店への決め方を選んでください"
+                      : "ホストが決め方を選んでいます..."}
+                </p>
+              </div>
+            </div>
+            {!isSolo && isHost && (
+              <div style={styles.decideButtonRow}>
+                <button
+                  type="button"
+                  onClick={handleDecideByRating}
+                  style={styles.decideRatingButton}
+                >
+                  評価1位で決定
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartRunoff}
+                  style={styles.decideRunoffButton}
+                >
+                  決選投票する
+                </button>
+              </div>
+            )}
+            {keptRestaurants.map((r) => (
+              <div key={r.id}>
+                <RestaurantCard restaurant={r} />
+                {isSolo && (
+                  <button
+                    type="button"
+                    onClick={() => handlePick(r.id)}
+                    style={styles.runoffVoteButton}
+                  >
+                    このお店にする
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -340,6 +507,95 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "1.5rem",
     fontWeight: "bold",
     margin: 0,
+  },
+  successSubtitle: {
+    color: "#276749",
+    fontSize: "0.82rem",
+    margin: 0,
+  },
+  runoffBanner: {
+    backgroundColor: "#ede9fe",
+    border: "1px solid #a78bfa",
+    borderRadius: "12px",
+    padding: "16px 20px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+  },
+  runoffTitle: {
+    fontWeight: "bold",
+    fontSize: "0.95rem",
+    color: "#5b21b6",
+    margin: "0 0 2px",
+  },
+  runoffSubtitle: {
+    color: "#5b21b6",
+    fontSize: "0.82rem",
+    margin: 0,
+  },
+  runoffVoteButton: {
+    width: "100%",
+    marginTop: "8px",
+    padding: "14px",
+    backgroundColor: "#7c3aed",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    fontSize: "0.95rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  runoffVotedButton: {
+    width: "100%",
+    marginTop: "8px",
+    padding: "14px",
+    backgroundColor: "#ede9fe",
+    color: "#5b21b6",
+    border: "2px solid #7c3aed",
+    borderRadius: "10px",
+    fontSize: "0.95rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  runoffHint: {
+    color: "#888",
+    fontSize: "0.8rem",
+    textAlign: "center",
+    margin: 0,
+  },
+  decideButtonRow: {
+    display: "flex",
+    gap: "10px",
+  },
+  decideRatingButton: {
+    flex: 1,
+    padding: "16px 12px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    fontSize: "0.95rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  decideRunoffButton: {
+    flex: 1,
+    padding: "16px 12px",
+    backgroundColor: "#7c3aed",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    fontSize: "0.95rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  runnersUpLabel: {
+    fontWeight: "bold",
+    fontSize: "0.82rem",
+    color: "#888",
+    margin: "8px 0 0",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
   },
   footer: {
     position: "sticky",
