@@ -68,6 +68,10 @@ npm run dev --workspace=client
 
 # バックエンド開発サーバー
 npm run dev --workspace=server
+
+# iOSアプリ（Capacitor）: Webビルドを同期してXcodeで開く
+npm run build --workspace=client
+cd client && npx cap sync ios && npx cap open ios
 ```
 
 ## 環境変数

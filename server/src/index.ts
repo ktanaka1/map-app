@@ -18,10 +18,14 @@ const httpServer = createServer(app);
 
 const PORT = process.env.PORT ?? 3000;
 
+// capacitor://localhost は iOS アプリ（Capacitor WebView）の origin
 const corsOrigin =
   process.env.NODE_ENV === "production"
-    ? (process.env.CLIENT_URL ?? "http://localhost:5173")
-    : /^http:\/\/localhost:\d+$/;
+    ? [
+        process.env.CLIENT_URL ?? "http://localhost:5173",
+        "capacitor://localhost",
+      ]
+    : [/^http:\/\/localhost:\d+$/, "capacitor://localhost"];
 
 // ── Middleware ──────────────────────────────────────────
 app.use(cors({ origin: corsOrigin, credentials: true }));
