@@ -1,7 +1,7 @@
 ---
 title: map-app server
 emoji: 🍽️
-colorFrom: orange
+colorFrom: yellow
 colorTo: red
 sdk: docker
 app_port: 3000
