@@ -13,7 +13,9 @@
  *
  * ルールまとめ:
  *   - 通常コンテンツ: body の padding-top/bottom で自動的に回避済み
- *   - position:sticky のヘッダー: top: var(--safe-top) を必ず指定する
+ *   - position:sticky のヘッダー: top: 0 + padding-top: var(--safe-top) を指定する
+ *     （top: var(--safe-top) にするとスクロールコンテナが内部にある場合に
+ *       セーフエリアへコンテンツが透けるため、ヘッダー自身で塗りつぶす）
  *   - position:sticky のフッター: padding-bottom: max(12px, var(--safe-bottom)) を指定する
  *   - position:fixed の要素: top/bottom に var(--safe-top/bottom) を加算する
  */

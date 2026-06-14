@@ -248,10 +248,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stickyHeader: {
     position: "sticky",
-    top: "var(--safe-top)",
+    top: 0,
     zIndex: 10,
     backgroundColor: "#fff",
     boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+    paddingTop: "var(--safe-top)",
   },
   headerInner: {
     display: "flex",
