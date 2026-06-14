@@ -297,7 +297,7 @@ const styles: Record<string, React.CSSProperties> = {
   scrollArea: {
     flex: 1,
     overflowY: "auto",
-    padding: "16px",
+    padding: "16px 16px 32px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",

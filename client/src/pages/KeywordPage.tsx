@@ -162,17 +162,18 @@ function KeywordPage() {
 
   return (
     <div style={styles.pageWrapper}>
+      {/* 固定ヘッダー */}
+      <div style={styles.pageHeader}>
+        <h2 style={styles.heading}>キーワードを入力</h2>
+        {session && (
+          <p style={styles.participants}>
+            参加者: {session.participants.map((p) => p.name).join("、")}
+          </p>
+        )}
+      </div>
+
       {/* スクロール可能なコンテンツ領域 */}
       <div style={styles.scrollArea}>
-        <div style={styles.headerSection}>
-          <h2 style={styles.heading}>キーワードを入力</h2>
-          {session && (
-            <p style={styles.participants}>
-              参加者: {session.participants.map((p) => p.name).join("、")}
-            </p>
-          )}
-        </div>
-
         <div style={styles.card}>
           {/* GPS状態バナー */}
           {gpsStatus === "ok" && coords && (
@@ -360,19 +361,22 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     backgroundColor: "#f5f5f5",
   },
+  pageHeader: {
+    flexShrink: 0,
+    backgroundColor: "#fff",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+    paddingTop: "var(--safe-top)",
+    padding: "var(--safe-top) 16px 14px",
+    textAlign: "center",
+  },
   scrollArea: {
     flex: 1,
     overflowY: "auto",
-    padding: "24px 16px 16px",
+    padding: "16px 16px 32px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     gap: "16px",
-  },
-  headerSection: {
-    textAlign: "center",
-    width: "100%",
-    maxWidth: "480px",
   },
   heading: {
     fontSize: "1.5rem",
