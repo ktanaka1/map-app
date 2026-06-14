@@ -140,14 +140,15 @@ function TopPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: "100vh",
+    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
     backgroundColor: "#f5f5f5",
   },
   scrollArea: {
     flex: 1,
-    overflowY: "auto",
+    overflowY: "hidden",
     padding: "40px 16px 16px",
     display: "flex",
     flexDirection: "column",
@@ -257,8 +258,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #fcd34d",
   },
   footer: {
-    position: "sticky",
-    bottom: 0,
     backgroundColor: "#fff",
     borderTop: "1px solid #eee",
     padding: "12px 16px",
