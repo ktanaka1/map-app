@@ -8,7 +8,7 @@
 - **バックエンド**: Express + Socket.IO
 - **データ管理**: インメモリ（MVP方針・2026-06確定。セッションは24時間TTLの短命データのためDBを使わない。将来の履歴機能でPostgreSQL + Prismaを再検討、schema.prismaはドラフトとして保管）
 - **外部API**: Google Places API（飲食店検索・クチコミ取得）
-- **インフラ**: Vercel（フロント）+ バックエンドはデプロイ先検討中（旧Railway・無料期間終了）
+- **インフラ**: Vercel（フロント）+ Hugging Face Spaces（バックエンド・Docker）
 - **設計パターン**: モノリス（レイヤードアーキテクチャ）
 
 ## 選定理由
@@ -18,7 +18,7 @@
 - **Express + Socket.IO**: WebSocketのルーム機能がセッション管理に直結。自動再接続で不安定な回線にも対応
 - **インメモリ管理**: セッション・投票は24時間で消える短命データであり、MVPでは速度優先でDBを持たない。サーバー再起動での消失は許容（将来の履歴機能でPostgreSQL + Prismaを再検討）
 - **Google Places API**: 周辺検索・クチコミ・評価をワンストップで提供。GPS連携が標準機能
-- **Vercel + Railway**: フロントはCDN配信で高速、バックエンドはWebSocket対応の常時稼働サーバー
+- **Vercel + Hugging Face Spaces**: フロントはCDN配信で高速。バックエンドはHF Spaces（Docker / CPU Basic）を採用。カード登録不要の無料枠でWebSocket対応・常時稼働（48時間無アクセスでスリープ、HTTPアクセスで自動復帰）
 
 ## ディレクトリ構成
 
