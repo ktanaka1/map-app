@@ -6,6 +6,11 @@ const config: CapacitorConfig = {
   appId: "jp.cloverhd.mapapp",
   appName: "map-app",
   webDir: "dist",
+  ios: {
+    // キーボード表示時にWebViewをリサイズしてコンテンツを押し上げる
+    // （overflow:hiddenで固定したページでも入力欄が隠れず操作できる）
+    keyboardResize: "native" as const,
+  },
   // ローカル実機/シミュレータで Vite dev サーバーに接続する場合は
   // 以下を一時的に有効化する（コミットしないこと）:
   // server: { url: "http://<MacのローカルIP>:5173", cleartext: true },
