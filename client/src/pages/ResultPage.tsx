@@ -402,7 +402,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stickyHeader: {
     position: "sticky",
-    top: 0,
+    top: "var(--safe-top)",
     zIndex: 10,
     backgroundColor: "#fff",
     boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
@@ -603,7 +603,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#fff",
     borderTop: "1px solid #eee",
     padding: "12px 16px",
-    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+    paddingBottom: "max(12px, var(--safe-bottom))",
   },
   footerInner: {
     maxWidth: "480px",

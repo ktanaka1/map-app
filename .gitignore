@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production
 
 # 認証情報
 credentials.json

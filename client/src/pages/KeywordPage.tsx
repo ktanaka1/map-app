@@ -75,7 +75,7 @@ function KeywordPage() {
           setGpsStatus("error");
         }
       },
-      { timeout: 10000, maximumAge: 60000 },
+      { timeout: 5000, maximumAge: 60000 },
     );
   }, []);
 
@@ -151,20 +151,12 @@ function KeywordPage() {
     );
   };
 
-  // GPS取得中 or 手動入力で座標未確定の間は検索ボタンを無効化
   const isLocationReady = coords !== null;
-  const needsManualInput = gpsStatus === "denied" || gpsStatus === "error";
+  const needsManualInput = gpsStatus !== "ok";
   const isSearchButtonDisabled =
-    keywords.length === 0 ||
-    isSearching ||
-    !isLocationReady ||
-    gpsStatus === "acquiring";
+    keywords.length === 0 || isSearching || !isLocationReady;
 
-  const searchButtonLabel = isSearching
-    ? "検索中..."
-    : gpsStatus === "acquiring"
-      ? "現在地を取得中..."
-      : "このキーワードで探す";
+  const searchButtonLabel = isSearching ? "検索中..." : "このキーワードで探す";
 
   if (isRejoining) return <RejoiningOverlay />;
 
@@ -183,12 +175,6 @@ function KeywordPage() {
 
         <div style={styles.card}>
           {/* GPS状態バナー */}
-          {gpsStatus === "acquiring" && (
-            <div style={{ ...styles.banner, ...styles.bannerInfo }}>
-              現在地を取得中...
-            </div>
-          )}
-
           {gpsStatus === "ok" && coords && (
             <div style={{ ...styles.banner, ...styles.bannerSuccess }}>
               現在地を取得しました（{coords.lat.toFixed(4)},{" "}
@@ -199,9 +185,11 @@ function KeywordPage() {
           {needsManualInput && (
             <div style={styles.manualSection}>
               <div style={{ ...styles.banner, ...styles.bannerWarning }}>
-                {gpsStatus === "denied"
-                  ? "位置情報の取得が拒否されました。場所をテキストで入力してください。"
-                  : "位置情報の取得に失敗しました。場所をテキストで入力してください。"}
+                {gpsStatus === "acquiring"
+                  ? "現在地を取得中です。または場所をテキストで入力してください。"
+                  : gpsStatus === "denied"
+                    ? "位置情報の取得が拒否されました。場所をテキストで入力してください。"
+                    : "位置情報の取得に失敗しました。場所をテキストで入力してください。"}
               </div>
 
               <div style={styles.inputRow}>
@@ -549,7 +537,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#fff",
     borderTop: "1px solid #eee",
     padding: "12px 16px",
-    paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+    paddingBottom: "max(12px, var(--safe-bottom))",
   },
   footerInner: {
     maxWidth: "480px",
