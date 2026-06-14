@@ -355,7 +355,7 @@ function KeywordPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
+    height: "100vh",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -365,8 +365,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
     backgroundColor: "#fff",
     boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-    paddingTop: "var(--safe-top)",
-    padding: "var(--safe-top) 16px 14px",
+    padding: "calc(var(--safe-top) + 8px) 16px 14px",
     textAlign: "center",
   },
   scrollArea: {

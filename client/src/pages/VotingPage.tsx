@@ -72,6 +72,31 @@ function VotingPage() {
             </span>
           </div>
         </div>
+        {/* 参加者進捗（マルチ時のみ、1行コンパクト） */}
+        {totalParticipants > 1 && (
+          <div style={styles.participantStrip}>
+            {participants.map((p) => {
+              const isMe = p.id === state.me?.id;
+              const count = isMe
+                ? votedCount
+                : (participantVoteCounts.get(p.id) ?? 0);
+              return (
+                <span key={p.id} style={styles.participantChip}>
+                  <span
+                    style={
+                      isMe
+                        ? styles.participantNameMe
+                        : styles.participantNameOther
+                    }
+                  >
+                    {p.name}
+                  </span>{" "}
+                  {count}/{restaurants.length}
+                </span>
+              );
+            })}
+          </div>
+        )}
         {/* プログレスバー */}
         <div style={styles.progressBarTrack}>
           <div
@@ -85,29 +110,7 @@ function VotingPage() {
 
       {/* スクロール可能なコンテンツ */}
       <div style={styles.scrollArea}>
-        {/* 参加者進捗（マルチ時のみ） */}
-        {totalParticipants > 1 && (
-          <div style={styles.progressSection}>
-            <p style={styles.progressTitle}>参加者の進捗</p>
-            <div style={styles.progressList}>
-              {participants.map((p) => {
-                const isMe = p.id === state.me?.id;
-                const count = isMe
-                  ? votedCount
-                  : (participantVoteCounts.get(p.id) ?? 0);
-                return (
-                  <div key={p.id} style={styles.progressItem}>
-                    <span style={styles.progressName}>
-                      {p.name}
-                      {isMe ? "（あなた）" : ""}
-                    </span>
-                    <span style={styles.progressVotes}>{count}票</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* 全投票完了して待機中・店舗カードのみ（参加者進捗はヘッダーへ移動） */}
 
         {/* 全投票完了して待機中 */}
         {allVoted ? (
@@ -233,7 +236,7 @@ function VotingPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
+    height: "100vh",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -257,7 +260,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "12px 16px 8px",
+    padding: "8px 16px 8px",
     maxWidth: "480px",
     margin: "0 auto",
     width: "100%",
@@ -303,39 +306,29 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: "14px",
   },
-  progressSection: {
-    backgroundColor: "#fff",
-    borderRadius: "12px",
-    padding: "16px 20px",
-    width: "100%",
+  participantStrip: {
+    display: "flex",
+    gap: "10px",
+    padding: "4px 16px 6px",
+    overflowX: "auto",
+    scrollbarWidth: "none" as const,
     maxWidth: "480px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    margin: "0 auto",
+    width: "100%",
+    boxSizing: "border-box",
   },
-  progressTitle: {
-    fontWeight: "bold",
-    fontSize: "0.82rem",
+  participantChip: {
+    fontSize: "0.72rem",
     color: "#888",
-    margin: "0 0 10px",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
-  progressList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  progressItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: "0.9rem",
-    color: "#333",
-  },
-  progressName: {
-    color: "#444",
-  },
-  progressVotes: {
+  participantNameMe: {
     color: "#4a90e2",
     fontWeight: "bold",
+  },
+  participantNameOther: {
+    color: "#555",
   },
   waitingCard: {
     backgroundColor: "#fff",

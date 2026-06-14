@@ -96,7 +96,7 @@ function JoinPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
+    height: "100vh",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -105,7 +105,7 @@ const styles: Record<string, React.CSSProperties> = {
   scrollArea: {
     flex: 1,
     overflowY: "auto",
-    padding: "40px 16px 16px",
+    padding: "max(40px, calc(var(--safe-top) + 16px)) 16px 16px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",

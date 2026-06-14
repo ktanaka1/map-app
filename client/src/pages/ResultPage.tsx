@@ -373,7 +373,7 @@ function RestaurantCard({
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
+    height: "100vh",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -411,7 +411,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "14px 16px",
+    padding: "8px 16px",
     maxWidth: "480px",
     margin: "0 auto",
     width: "100%",

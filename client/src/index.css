@@ -12,12 +12,12 @@
  * Web レイアウトへの影響はない。
  *
  * ルールまとめ:
- *   - 通常コンテンツ: body の padding-top/bottom で自動的に回避済み
- *   - position:sticky のヘッダー: top: 0 + padding-top: var(--safe-top) を指定する
- *     （top: var(--safe-top) にするとスクロールコンテナが内部にある場合に
- *       セーフエリアへコンテンツが透けるため、ヘッダー自身で塗りつぶす）
- *   - position:sticky のフッター: padding-bottom: max(12px, var(--safe-bottom)) を指定する
- *   - position:fixed の要素: top/bottom に var(--safe-top/bottom) を加算する
+ *   - body には safe area パディングを持たせない（二重になるため）
+ *   - ヘッダーあり画面: pageWrapper は height:100vh、
+ *     ヘッダーが paddingTop:var(--safe-top) で白背景を上端まで伸ばす
+ *   - ヘッダーなし画面: scrollArea の paddingTop に var(--safe-top) を指定
+ *   - フッター: paddingBottom: max(12px, var(--safe-bottom)) を指定
+ *   - position:fixed の要素: paddingTop/Bottom に var(--safe-top/bottom) を加算
  */
 :root {
   --safe-top: env(safe-area-inset-top);
@@ -34,10 +34,6 @@ body {
   background: #f5f5f5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
 }
 
 input,

@@ -12,7 +12,8 @@ function WaitingPage() {
     useSocketContext();
   const { session, participants } = state;
 
-  const joinUrl = `${window.location.origin}/join/${sessionId}`;
+  const appBase = import.meta.env.VITE_APP_URL ?? window.location.origin;
+  const joinUrl = `${appBase}/join/${sessionId}`;
 
   // フェーズが変わったらリダイレクト
   useEffect(() => {
@@ -155,7 +156,7 @@ function WaitingPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
+    height: "100vh",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -164,7 +165,7 @@ const styles: Record<string, React.CSSProperties> = {
   scrollArea: {
     flex: 1,
     overflowY: "auto",
-    padding: "24px 16px 16px",
+    padding: "max(24px, calc(var(--safe-top) + 16px)) 16px 16px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
