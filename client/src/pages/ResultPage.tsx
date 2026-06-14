@@ -373,9 +373,10 @@ function RestaurantCard({
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: "100vh",
+    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
     backgroundColor: "#f5f5f5",
   },
   centerBox: {
@@ -401,9 +402,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   stickyHeader: {
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
+    flexShrink: 0,
     backgroundColor: "#fff",
     boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
     paddingTop: "var(--safe-top)",
@@ -599,8 +598,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.05em",
   },
   footer: {
-    position: "sticky",
-    bottom: 0,
+    flexShrink: 0,
     backgroundColor: "#fff",
     borderTop: "1px solid #eee",
     padding: "12px 16px",

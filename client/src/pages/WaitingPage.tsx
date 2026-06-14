@@ -155,9 +155,10 @@ function WaitingPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   pageWrapper: {
-    minHeight: "100vh",
+    height: "calc(100vh - var(--safe-top) - var(--safe-bottom))",
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
     backgroundColor: "#f5f5f5",
   },
   scrollArea: {
@@ -331,8 +332,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "8px 0 0",
   },
   footer: {
-    position: "sticky",
-    bottom: 0,
+    flexShrink: 0,
     backgroundColor: "#fff",
     borderTop: "1px solid #eee",
     padding: "12px 16px",
