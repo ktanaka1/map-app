@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Restaurant } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
@@ -7,6 +8,7 @@ import RejoiningOverlay from "../components/RejoiningOverlay";
 function ResultPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const {
     state,
     isRejoining,
@@ -25,6 +27,12 @@ function ResultPage() {
     myRunoffVote,
     runoffVotedCount,
   } = state;
+
+  useEffect(() => {
+    if (finalDecision) {
+      scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [finalDecision]);
 
   if (isRejoining) return <RejoiningOverlay />;
 
@@ -118,7 +126,7 @@ function ResultPage() {
       </div>
 
       {/* スクロール可能なコンテンツ */}
-      <div style={styles.scrollArea}>
+      <div ref={scrollAreaRef} style={styles.scrollArea}>
         {votingResult.allRejected ? (
           <div style={styles.section}>
             <div style={styles.allRejectedBanner}>
