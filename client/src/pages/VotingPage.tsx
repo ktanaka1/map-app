@@ -1,8 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useDrag } from "@use-gesture/react";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import type { VoteChoice } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
 import RejoiningOverlay from "../components/RejoiningOverlay";
+
+const SWIPE_THRESHOLD = 100;
+
+async function triggerHaptic(style: ImpactStyle) {
+  try {
+    await Haptics.impact({ style });
+  } catch {
+    // Web環境ではハプティクス未対応のため無視
+  }
+}
 
 function VotingPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -23,6 +35,9 @@ function VotingPage() {
   const heroPhoto = allPhotos[0] ?? null;
   const stripPhotos = allPhotos.slice(1);
 
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
   // フェーズが変わったらリダイレクト
   useEffect(() => {
     if (session?.phase === "result") {
@@ -30,16 +45,34 @@ function VotingPage() {
     }
   }, [session?.phase, sessionId, navigate]);
 
-  if (isRejoining) return <RejoiningOverlay />;
-
   const handleVote = (choice: VoteChoice) => {
     if (!currentRestaurant || !sessionId) return;
+    triggerHaptic(choice === "keep" ? ImpactStyle.Light : ImpactStyle.Medium);
     submitVote(sessionId, currentRestaurant.id, choice, (res) => {
       if (!res.success) {
         console.error("投票に失敗しました:", res.error);
       }
     });
   };
+
+  const bind = useDrag(
+    ({ movement: [mx], active, last }) => {
+      if (active) {
+        setDragX(mx);
+        setIsDragging(true);
+      }
+      if (last) {
+        if (Math.abs(mx) >= SWIPE_THRESHOLD) {
+          handleVote(mx > 0 ? "keep" : "reject");
+        }
+        setDragX(0);
+        setIsDragging(false);
+      }
+    },
+    { axis: "x", filterTaps: true },
+  );
+
+  if (isRejoining) return <RejoiningOverlay />;
 
   if (restaurants.length === 0) {
     return (
@@ -123,7 +156,38 @@ function VotingPage() {
           </div>
         ) : (
           /* 店舗カード */
-          <div style={styles.restaurantCard}>
+          <div
+            {...bind()}
+            style={{
+              ...styles.restaurantCard,
+              transform: `translateX(${dragX}px) rotate(${dragX / 25}deg)`,
+              transition: isDragging ? "none" : "transform 0.3s ease",
+              touchAction: "pan-y",
+              userSelect: "none",
+              position: "relative",
+            }}
+          >
+            {/* スワイプオーバーレイ */}
+            {dragX > 30 && (
+              <div
+                style={{
+                  ...styles.swipeOverlay,
+                  backgroundColor: `rgba(72,187,120,${Math.min((dragX - 30) / 70, 0.75)})`,
+                }}
+              >
+                <span style={styles.swipeLabel}>✓ キープ</span>
+              </div>
+            )}
+            {dragX < -30 && (
+              <div
+                style={{
+                  ...styles.swipeOverlay,
+                  backgroundColor: `rgba(252,129,129,${Math.min((-dragX - 30) / 70, 0.75)})`,
+                }}
+              >
+                <span style={styles.swipeLabel}>✗ 除外</span>
+              </div>
+            )}
             {/* トップ写真 */}
             {heroPhoto && (
               <img
@@ -373,6 +437,21 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     maxWidth: "480px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  },
+  swipeOverlay: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    pointerEvents: "none",
+  },
+  swipeLabel: {
+    fontSize: "2rem",
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 4px rgba(0,0,0,0.3)",
   },
   heroPhoto: {
     width: "100%",
