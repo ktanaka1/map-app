@@ -22,36 +22,37 @@ geocodingRouter.get("/", async (req, res) => {
   }
 
   try {
-    // Geocoding APIの代わりにPlaces Text Searchで座標を取得
-    const url = new URL(
-      "https://maps.googleapis.com/maps/api/place/textsearch/json",
+    const response = await fetch(
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        headers: {
+          "X-Goog-Api-Key": PLACES_API_KEY,
+          "X-Goog-FieldMask": "places.location",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          textQuery: address,
+          languageCode: "ja",
+          pageSize: 1,
+        }),
+      },
     );
-    url.searchParams.set("query", address);
-    url.searchParams.set("language", "ja");
-    url.searchParams.set("key", PLACES_API_KEY);
 
-    const response = await fetch(url.toString());
     if (!response.ok) {
-      throw new Error(`Places API エラー: ${response.status}`);
+      throw new Error(`Places API (New) エラー: ${response.status}`);
     }
 
     const data = (await response.json()) as {
-      status: string;
-      results: Array<{
-        geometry: { location: { lat: number; lng: number } };
-      }>;
-      error_message?: string;
+      places?: Array<{ location: { latitude: number; longitude: number } }>;
     };
 
-    if (data.status !== "OK" || data.results.length === 0) {
-      const detail = data.error_message ? `: ${data.error_message}` : "";
-      res.status(404).json({
-        error: `場所が見つかりませんでした (${data.status})${detail}`,
-      });
+    if (!data.places || data.places.length === 0) {
+      res.status(404).json({ error: "場所が見つかりませんでした" });
       return;
     }
 
-    const { lat, lng } = data.results[0].geometry.location;
+    const { latitude: lat, longitude: lng } = data.places[0].location;
     res.json({ lat, lng });
   } catch (err) {
     console.error("[Geocoding] エラー:", err);
