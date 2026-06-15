@@ -7,9 +7,9 @@ const config: CapacitorConfig = {
   appName: "map-app",
   webDir: "dist",
   ios: {
-    // キーボード表示時にWebViewをリサイズしてコンテンツを押し上げる
-    // （overflow:hiddenで固定したページでも入力欄が隠れず操作できる）
-    keyboardResize: "native" as const,
+    // "none": WebViewをリサイズしないのでoverflow:hiddenが常に効き、スクロール不可を保証できる
+    // "native"はkeyboard表示時に100vhが追随せずコンテンツがはみ出してスクロール可能になる問題があった
+    keyboardResize: "none" as const,
   },
   // ローカル実機/シミュレータで Vite dev サーバーに接続する場合は
   // 以下を一時的に有効化する（コミットしないこと）:
