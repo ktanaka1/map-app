@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SessionMode } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
+import { scanSessionQr } from "../services/qrScanner";
 
 function TopPage() {
   const navigate = useNavigate();
@@ -53,6 +54,16 @@ function TopPage() {
         navigate(`/session/${sessionId}/waiting`);
       }
     });
+  };
+
+  const handleScanQr = async () => {
+    const outcome = await scanSessionQr();
+    if (outcome.status === "ok") {
+      navigate(`/join/${outcome.sessionId}`);
+    } else if (outcome.status === "invalid") {
+      alert("このQRコードはセッションのものではありません");
+    }
+    // cancelled は何もしない
   };
 
   const isDisabled = isLoading || !selectedMode || !name.trim();
@@ -116,6 +127,13 @@ function TopPage() {
           {endedMessage && <p style={styles.ended}>{endedMessage}</p>}
           {error && <p style={styles.error}>{error}</p>}
         </div>
+
+        <div style={styles.joinDivider}>
+          <span style={styles.joinDividerText}>または</span>
+        </div>
+        <button type="button" onClick={handleScanQr} style={styles.scanButton}>
+          QRコードで参加
+        </button>
       </div>
 
       {/* 下部固定ボタン */}
@@ -177,6 +195,34 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     maxWidth: "480px",
     boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+  },
+  joinDivider: {
+    width: "100%",
+    maxWidth: "480px",
+    textAlign: "center",
+    margin: "20px 0 12px",
+    borderTop: "1px solid #e0e0e0",
+    position: "relative",
+  },
+  joinDividerText: {
+    position: "relative",
+    top: "-11px",
+    backgroundColor: "#f5f5f5",
+    padding: "0 12px",
+    color: "#999",
+    fontSize: "0.85rem",
+  },
+  scanButton: {
+    width: "100%",
+    maxWidth: "480px",
+    padding: "14px",
+    backgroundColor: "#fff",
+    color: "#4a90e2",
+    border: "1px solid #4a90e2",
+    borderRadius: "12px",
+    fontSize: "1rem",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
   inputGroup: {
     marginBottom: "28px",
