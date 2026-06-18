@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Restaurant } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
@@ -29,10 +29,26 @@ function ResultPage() {
     runoffVotedCount,
   } = state;
 
-  useEffect(() => {
-    if (finalDecision) {
-      scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    }
+  // 決定確定時にスクロール領域を最上部へ戻す。
+  // - behavior:"smooth" は使わない（iOS WKWebView でネイティブ慣性スクロールと
+  //   JSアニメが競合し途中停止するため）。即時 scrollTop=0 は決定カードが常に最上部で冪等。
+  // - useLayoutEffect で paint 前に確定し、旧位置のチラつきを防ぐ。
+  // - ハイライト画像の遅延ロードによる reflow 後にもう一度合わせる（double rAF・冪等）。
+  useLayoutEffect(() => {
+    if (!finalDecision) return;
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    let innerRaf = 0;
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => {
+        el.scrollTop = 0;
+      });
+    });
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+    };
   }, [finalDecision]);
 
   if (isRejoining) return <RejoiningOverlay />;
