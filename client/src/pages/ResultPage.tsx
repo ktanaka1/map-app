@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { Restaurant } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
 import { clearSessionFromStorage } from "../hooks/useSocket";
+import { shareOrCopy } from "../services/share";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 function ResultPage() {
@@ -115,6 +116,17 @@ function ResultPage() {
     });
   };
 
+  const handleShareDecided = (restaurant: Restaurant) => {
+    void shareOrCopy({
+      title: "お店が決まりました！",
+      text: `「${restaurant.name}」に決定！\n${restaurant.address}`,
+      url: restaurant.websiteUrl ?? restaurant.googleMapsUrl,
+      dialogTitle: "決まったお店を共有",
+    }).then((result) => {
+      if (result === "copied") alert("お店の情報をコピーしました");
+    });
+  };
+
   return (
     <div style={styles.pageWrapper}>
       {/* 固定ヘッダー */}
@@ -166,6 +178,13 @@ function ResultPage() {
               </div>
             </div>
             <RestaurantCard restaurant={decidedRestaurant} highlight />
+            <button
+              type="button"
+              onClick={() => handleShareDecided(decidedRestaurant)}
+              style={styles.shareButton}
+            >
+              このお店を共有
+            </button>
             {runnersUp.length > 0 && (
               <>
                 <p style={styles.runnersUpLabel}>次点（全員一致だったお店）</p>
@@ -594,6 +613,18 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     borderRadius: "10px",
     fontSize: "0.95rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  shareButton: {
+    width: "100%",
+    padding: "12px",
+    marginTop: "12px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "1rem",
     fontWeight: "bold",
     cursor: "pointer",
   },

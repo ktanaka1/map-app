@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { useSocketContext } from "../hooks/useSocketContext";
 import { clearSessionFromStorage } from "../hooks/useSocket";
+import { shareOrCopy } from "../services/share";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 function WaitingPage() {
@@ -35,6 +36,18 @@ function WaitingPage() {
       if (!res.success) {
         alert(res.error ?? "確定に失敗しました");
       }
+    });
+  };
+
+  const handleShare = () => {
+    void shareOrCopy({
+      title: "一緒にお店を決めよう",
+      text: "このリンクから参加してね！",
+      url: joinUrl,
+      dialogTitle: "招待リンクを共有",
+    }).then((result) => {
+      // Web で共有シート非対応のときはコピーにフォールバックされる
+      if (result === "copied") alert("リンクをコピーしました");
     });
   };
 
@@ -78,6 +91,13 @@ function WaitingPage() {
             <QRCodeSVG value={joinUrl} size={240} />
           </div>
           <p style={styles.qrHint}>スキャンするとすぐに参加できます</p>
+          <button
+            type="button"
+            onClick={handleShare}
+            style={styles.shareButton}
+          >
+            招待リンクを共有
+          </button>
           <div style={styles.linkRow}>
             <input
               readOnly
@@ -242,6 +262,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#888",
     margin: "0 0 16px",
   },
+  shareButton: {
+    width: "100%",
+    padding: "12px",
+    marginBottom: "12px",
+    backgroundColor: "#4a90e2",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "1rem",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
   linkRow: {
     display: "flex",
     gap: "8px",
@@ -258,9 +290,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   copyButton: {
     padding: "10px 20px",
-    backgroundColor: "#4a90e2",
-    color: "#fff",
-    border: "none",
+    backgroundColor: "#fff",
+    color: "#4a90e2",
+    border: "1px solid #4a90e2",
     borderRadius: "8px",
     fontSize: "0.9rem",
     fontWeight: "bold",
