@@ -76,11 +76,18 @@
 - **ホスト**: iOS アプリ（Capacitor ハイブリッド、App Store 配布）＋ Web
 - **参加者**: Web のまま（QR/リンクでインストール不要の即入室を維持）
 - 詳細は `docs/architecture-decisions/ADR-004-capacitor-ios-app.md` を参照
+- **App Store 4.2 対策の再検討と確定スコープ**は `ADR-005-stay-capacitor-vs-react-native.md`（RN移行せずCapacitor継続）／審査原稿は `app-store-review-notes.md` を参照
+
+### iOS ネイティブ価値（実装済み・2026-06-18）
+
+- スワイプ投票＋ハプティクス（`@capacitor/haptics`）
+- ネイティブ共有シート（`@capacitor/share`）— 招待リンク／決定店の共有
+- カメラQRスキャン（`@capacitor/barcode-scanner`）— セッション参加（標準カメラ→Web参加ルートは不変）
 
 ## 将来的に追加したい機能
 
-- スワイプジェスチャー対応（iOSアプリ化の審査対策を兼ねて前倒し予定）
-- プッシュ通知（投票揃った通知等。Capacitorプラグインで対応可能）
+- プッシュ通知（投票揃った通知等。初回提出スコープ外、次バージョンで対応＝ADR-005）
+- ネイティブコンテキストメニュー（保留＝ADR-005）
 - ユーザー認証・アカウント管理
 - 過去に決めたお店の履歴保存
 - ユーザー投稿クチコミ
