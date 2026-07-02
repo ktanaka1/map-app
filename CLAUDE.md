@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 技術スタック
 
 - **フロントエンド**: React + Vite（TypeScript）→ Vercel にデプロイ
-- **バックエンド**: Express + Socket.IO（TypeScript）→ デプロイ先検討中（旧Railway）
+- **バックエンド**: Express + Socket.IO（TypeScript）→ Hugging Face Spaces（Dockerfile）にデプロイ
 - **データ管理**: インメモリ（MVP方針。セッションは24時間TTLの短命データのためDB不使用。`server/prisma/schema.prisma` は将来の履歴機能用ドラフトとして未使用のまま保管）
 - **外部API**: Google Places API（飲食店検索・クチコミ・GPS周辺検索）
 - **モノレポ管理**: npm workspaces（root `package.json`）

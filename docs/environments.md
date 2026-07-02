@@ -12,7 +12,8 @@
 
 - **サービス**: Vercel（無料）
 - **リポジトリ設定**: Root Directory = `client/`
-- **SPAルーティング**: `vercel.json`（リポジトリルート）に rewrite ルールを記載
+- **SPAルーティング**: `client/vercel.json` に rewrite ルールを記載
+  （Root Directory が `client/` のため、リポジトリルートの vercel.json は読まれない）
 
 環境変数:
 
