@@ -3,7 +3,10 @@ import { getSession } from "../services/sessionStore";
 
 export const sessionRouter = Router();
 
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+// モジュールロード時に固定すると dotenv の読み込み順に暗黙依存するため、都度参照する
+function clientUrl(): string {
+  return process.env.CLIENT_URL ?? "http://localhost:5173";
+}
 
 /**
  * POST /api/sessions
@@ -24,7 +27,7 @@ sessionRouter.post("/", async (req, res) => {
     return;
   }
 
-  const joinUrl = `${CLIENT_URL}/join/${sessionId}`;
+  const joinUrl = `${clientUrl()}/join/${sessionId}`;
 
   res.json({
     session: entry.session,
@@ -45,7 +48,7 @@ sessionRouter.get("/:id", async (req, res) => {
     return;
   }
 
-  const joinUrl = `${CLIENT_URL}/join/${id}`;
+  const joinUrl = `${clientUrl()}/join/${id}`;
 
   res.json({
     session: entry.session,

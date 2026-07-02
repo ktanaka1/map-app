@@ -16,6 +16,11 @@ geocodingRouter.get("/", async (req, res) => {
     return;
   }
 
+  if (address.length > 100) {
+    res.status(400).json({ error: "address が長すぎます" });
+    return;
+  }
+
   if (!PLACES_API_KEY) {
     res.status(500).json({ error: "Geocoding APIキーが設定されていません" });
     return;

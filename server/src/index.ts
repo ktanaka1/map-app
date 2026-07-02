@@ -3,6 +3,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import type { ClientToServerEvents, ServerToClientEvents } from "shared/types";
 
 import { sessionRouter } from "./routes/sessions";
@@ -18,6 +19,14 @@ const httpServer = createServer(app);
 
 const PORT = process.env.PORT ?? 3000;
 
+// 本番で CLIENT_URL を設定し忘れると localhost のみ許可の CORS で静かに起動し、
+// フロントからの接続が全滅して原因調査が難航するため、起動時に落とす
+if (process.env.NODE_ENV === "production" && !process.env.CLIENT_URL) {
+  throw new Error(
+    "CLIENT_URL environment variable is required in production (CORS allow origin)",
+  );
+}
+
 // capacitor://localhost は iOS アプリ（Capacitor WebView）の origin
 const corsOrigin =
   process.env.NODE_ENV === "production"
@@ -28,8 +37,25 @@ const corsOrigin =
     : [/^http:\/\/localhost:\d+$/, "capacitor://localhost"];
 
 // ── Middleware ──────────────────────────────────────────
+// HF Spaces はリバースプロキシ配下のため、X-Forwarded-For から実クライアントIPを取る
+app.set("trust proxy", 1);
 app.use(cors({ origin: corsOrigin, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "10kb" }));
+
+// Google Places API（従量課金）のプロキシを直叩きから守る。
+// CORS はブラウザしか縛れないため、IP単位のレート制限を全 REST に掛ける
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: "リクエストが多すぎます。しばらくしてからお試しください",
+    },
+  }),
+);
 
 // ── REST Routes ─────────────────────────────────────────
 app.use("/api/sessions", sessionRouter);
