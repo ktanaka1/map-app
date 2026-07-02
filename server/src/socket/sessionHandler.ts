@@ -27,6 +27,7 @@ import {
   updateSocketMapping,
   scheduleDisconnect,
   cancelDisconnect,
+  MAX_KEYWORDS,
   type InMemorySession,
 } from "../services/sessionStore";
 import {
@@ -45,6 +46,70 @@ type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 const ALLOW_DUMMY_FALLBACK =
   process.env.ALLOW_DUMMY_FALLBACK === "true" ||
   process.env.NODE_ENV !== "production";
+
+const MAX_NAME_LENGTH = 30;
+const MAX_KEYWORD_LENGTH = 50;
+
+/** 文字列なら trim して返す。空・型違い・長すぎは null */
+function asTrimmedString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > maxLength) return null;
+  return trimmed;
+}
+
+/** 有限数かつ範囲内かを検証する */
+function isFiniteInRange(value: unknown, min: number, max: number): boolean {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+  );
+}
+
+type AckResponse = { success: boolean; error?: string };
+
+/**
+ * 全ハンドラ共通の安全策。悪意ある/壊れたクライアントの emit でプロセスを落とさない:
+ * - ack コールバックなしの emit は無視（catch 節での callback() 再 throw を防ぐ）
+ * - payload がオブジェクトでない場合は分割代入の TypeError になる前にエラー応答
+ * - 同期例外・Promise の reject の両方を握ってエラー応答に変換
+ * - callback の二重呼び出しを防止
+ */
+function guardHandler<P, R extends AckResponse>(
+  event: string,
+  handler: (payload: P, callback: (res: R) => void) => void | Promise<void>,
+): (payload: P, callback: (res: R) => void) => void {
+  return (payload, callback) => {
+    if (typeof callback !== "function") {
+      console.warn(`[Socket] ${event}: ack なしの emit を無視`);
+      return;
+    }
+    let acked = false;
+    const safeCallback = (res: R) => {
+      if (acked) return;
+      acked = true;
+      callback(res);
+    };
+    if (payload === null || typeof payload !== "object") {
+      safeCallback({ success: false, error: "不正なリクエストです" } as R);
+      return;
+    }
+    const fail = (err: unknown) => {
+      console.error(`[Socket] ${event} error:`, err);
+      safeCallback({ success: false, error: "Internal server error" } as R);
+    };
+    try {
+      const result = handler(payload, safeCallback);
+      if (result instanceof Promise) {
+        result.catch(fail);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  };
+}
 
 /**
  * 全員の投票が揃っていれば判定を実行し、結果をルーム全員に通知する。
@@ -121,6 +186,16 @@ function finalizeRunoffIfComplete(io: AppServer, sessionId: string): boolean {
 }
 
 /**
+ * セッションを削除し、ルームに残っているソケットも退室させる。
+ * ルームを掃除しないと、削除済みIDが再利用されたとき旧参加者に
+ * 新セッションのイベントが漏れる。
+ */
+function destroySession(io: AppServer, sessionId: string): void {
+  io.in(sessionId).socketsLeave(sessionId);
+  deleteSession(sessionId);
+}
+
+/**
  * 参加者をセッションから取り除いた後の後始末を一元化する。
  * 切断猶予タイマー満了時と明示的な退出（leave_session）の両方から呼ばれる。
  */
@@ -142,23 +217,36 @@ function removeAndReconcile(
   // 結果表示フェーズ: 閲覧中の参加者を巻き込まず、無人になったら削除するだけ
   if (session.phase === "result") {
     if (session.participants.length === 0) {
-      deleteSession(sessionId);
+      destroySession(io, sessionId);
       console.log(
         `[Socket] session deleted (result phase empty): ${sessionId}`,
       );
+      return;
     }
+    // 最終決定前にホストが抜けると decide_by_rating / start_runoff を
+    // 誰も実行できず詰むため、セッションを終了する
+    if (wasHost && !entry.finalDecision) {
+      io.to(sessionId).emit("session_ended", { reason: "host_left" });
+      destroySession(io, sessionId);
+      console.log(`[Socket] session ended (host_left in result): ${sessionId}`);
+      return;
+    }
+    io.to(sessionId).emit("participant_left", {
+      participantId,
+      participants: session.participants,
+    });
     return;
   }
 
   if (session.mode === "solo") {
-    deleteSession(sessionId);
+    destroySession(io, sessionId);
     console.log(`[Socket] solo session deleted: ${sessionId}`);
     return;
   }
 
   if (wasHost) {
     io.to(sessionId).emit("session_ended", { reason: "host_left" });
-    deleteSession(sessionId);
+    destroySession(io, sessionId);
     console.log(`[Socket] session ended (host_left): ${sessionId}`);
     return;
   }
@@ -171,7 +259,7 @@ function removeAndReconcile(
   // ホストのみになったらセッション終了
   if (session.participants.length <= 1) {
     io.to(sessionId).emit("session_ended", { reason: "participant_left" });
-    deleteSession(sessionId);
+    destroySession(io, sessionId);
     console.log(`[Socket] session ended (participant_left): ${sessionId}`);
     return;
   }
@@ -198,7 +286,7 @@ export function startSessionSweeper(io: AppServer): NodeJS.Timeout {
       const age = now - new Date(entry.session.createdAt).getTime();
       if (age > SESSION_TTL_MS) {
         io.to(sessionId).emit("session_ended", { reason: "timeout" });
-        deleteSession(sessionId);
+        destroySession(io, sessionId);
         console.log(`[Socket] session expired (timeout): ${sessionId}`);
       }
     }
@@ -216,21 +304,30 @@ export function registerSessionHandlers(
   /**
    * セッション作成
    */
-  socket.on("create_session", (payload, callback) => {
-    try {
+  socket.on(
+    "create_session",
+    guardHandler("create_session", (payload, callback) => {
       const { mode, hostName } = payload;
-      if (!hostName?.trim()) {
-        callback({ success: false, error: "名前を入力してください" });
+      if (mode !== "solo" && mode !== "multi") {
+        callback({ success: false, error: "不正なモードです" });
+        return;
+      }
+      const name = asTrimmedString(hostName, MAX_NAME_LENGTH);
+      if (!name) {
+        callback({
+          success: false,
+          error: `名前は1〜${MAX_NAME_LENGTH}文字で入力してください`,
+        });
         return;
       }
 
-      const entry = createSession(mode, hostName.trim(), socket.id);
+      const entry = createSession(mode, name, socket.id);
       const { session } = entry;
       const host = session.participants[0];
 
       socket.join(session.id);
       console.log(
-        `[Socket] create_session: id=${session.id}, mode=${mode}, host=${hostName}`,
+        `[Socket] create_session: id=${session.id}, mode=${mode}, host=${name}`,
       );
 
       callback({
@@ -243,23 +340,26 @@ export function registerSessionHandlers(
 
       // 作成者自身に session_phase_changed を送信してフェーズを伝える
       socket.emit("session_phase_changed", { phase: session.phase, session });
-    } catch (err) {
-      console.error("[Socket] create_session error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * セッションへの参加
    */
-  socket.on("join_session", async (payload, callback) => {
-    const { sessionId, participantName } = payload;
-    try {
-      const result = addParticipant(
-        sessionId,
-        participantName.trim(),
-        socket.id,
-      );
+  socket.on(
+    "join_session",
+    guardHandler("join_session", (payload, callback) => {
+      const { sessionId } = payload;
+      const name = asTrimmedString(payload.participantName, MAX_NAME_LENGTH);
+      if (!name) {
+        callback({
+          success: false,
+          error: `名前は1〜${MAX_NAME_LENGTH}文字で入力してください`,
+        });
+        return;
+      }
+
+      const result = addParticipant(sessionId, name, socket.id);
 
       if ("error" in result) {
         callback({ success: false, error: result.error });
@@ -269,9 +369,7 @@ export function registerSessionHandlers(
       const { entry, participant, token } = result;
 
       socket.join(sessionId);
-      console.log(
-        `[Socket] join_session: session=${sessionId}, name=${participantName}`,
-      );
+      console.log(`[Socket] join_session: session=${sessionId}, name=${name}`);
 
       // 全員に参加通知（トークンは本人への callback のみで返す）
       io.to(sessionId).emit("participant_joined", {
@@ -280,18 +378,16 @@ export function registerSessionHandlers(
       });
 
       callback({ success: true, session: entry.session, participant, token });
-    } catch (err) {
-      console.error("[Socket] join_session error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 参加者確定（ホストのみ）
    */
-  socket.on("confirm_participants", async (payload, callback) => {
-    const { sessionId } = payload;
-    try {
+  socket.on(
+    "confirm_participants",
+    guardHandler("confirm_participants", (payload, callback) => {
+      const { sessionId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -301,6 +397,12 @@ export function registerSessionHandlers(
       const participantId = entry.socketToParticipant.get(socket.id);
       if (participantId !== entry.session.hostId) {
         callback({ success: false, error: "ホストのみが操作できます" });
+        return;
+      }
+
+      // 投票中・結果表示中の再送でフェーズを巻き戻さない
+      if (entry.session.phase !== "waiting") {
+        callback({ success: false, error: "参加者は確定済みです" });
         return;
       }
 
@@ -326,18 +428,25 @@ export function registerSessionHandlers(
       });
 
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] confirm_participants error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * キーワード追加
    */
-  socket.on("add_keyword", async (payload, callback) => {
-    const { sessionId, keyword } = payload;
-    try {
+  socket.on(
+    "add_keyword",
+    guardHandler("add_keyword", (payload, callback) => {
+      const { sessionId } = payload;
+      const keyword = asTrimmedString(payload.keyword, MAX_KEYWORD_LENGTH);
+      if (!keyword) {
+        callback({
+          success: false,
+          error: `キーワードは1〜${MAX_KEYWORD_LENGTH}文字で入力してください`,
+        });
+        return;
+      }
+
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -350,7 +459,20 @@ export function registerSessionHandlers(
         return;
       }
 
-      const updated = addKeyword(sessionId, keyword.trim());
+      if (entry.session.phase !== "keyword") {
+        callback({ success: false, error: "いまはキーワードを編集できません" });
+        return;
+      }
+
+      if (entry.session.keywords.length >= MAX_KEYWORDS) {
+        callback({
+          success: false,
+          error: `キーワードは${MAX_KEYWORDS}個までです`,
+        });
+        return;
+      }
+
+      const updated = addKeyword(sessionId, keyword);
       if (!updated) {
         callback({ success: false, error: "セッション更新に失敗しました" });
         return;
@@ -361,24 +483,22 @@ export function registerSessionHandlers(
       );
 
       io.to(sessionId).emit("keyword_added", {
-        keyword: keyword.trim(),
+        keyword,
         keywords: updated.session.keywords,
         addedBy: participantId,
       });
 
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] add_keyword error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * キーワード削除
    */
-  socket.on("remove_keyword", async (payload, callback) => {
-    const { sessionId, keyword } = payload;
-    try {
+  socket.on(
+    "remove_keyword",
+    guardHandler("remove_keyword", (payload, callback) => {
+      const { sessionId, keyword } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -408,20 +528,18 @@ export function registerSessionHandlers(
       });
 
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] remove_keyword error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 検索開始（ホストのみ）
    * キーワードがある場合は Text Search、ない場合は Nearby Search を使用する。
    * API 失敗時はダミーデータにフォールバックして処理を継続する。
    */
-  socket.on("start_search", async (payload, callback) => {
-    const { sessionId, location, radius, maxPriceLevel } = payload;
-    try {
+  socket.on(
+    "start_search",
+    guardHandler("start_search", async (payload, callback) => {
+      const { sessionId, location, radius, maxPriceLevel } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -431,6 +549,24 @@ export function registerSessionHandlers(
       const participantId = entry.socketToParticipant.get(socket.id);
       if (participantId !== entry.session.hostId) {
         callback({ success: false, error: "ホストのみが操作できます" });
+        return;
+      }
+
+      // 投票中・結果表示中の再実行（ダブルクリック・リプレイ）で
+      // 候補と票が差し替わる事故を防ぐ
+      if (entry.session.phase !== "keyword") {
+        callback({ success: false, error: "いまは検索を開始できません" });
+        return;
+      }
+
+      if (
+        !location ||
+        !isFiniteInRange(location.lat, -90, 90) ||
+        !isFiniteInRange(location.lng, -180, 180) ||
+        !isFiniteInRange(radius, 50, 50_000) ||
+        (maxPriceLevel != null && !isFiniteInRange(maxPriceLevel, 0, 4))
+      ) {
+        callback({ success: false, error: "検索条件が不正です" });
         return;
       }
 
@@ -496,18 +632,21 @@ export function registerSessionHandlers(
       });
 
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] start_search error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 投票送信
    */
-  socket.on("submit_vote", async (payload, callback) => {
-    const { sessionId, restaurantId, choice } = payload;
-    try {
+  socket.on(
+    "submit_vote",
+    guardHandler("submit_vote", (payload, callback) => {
+      const { sessionId, restaurantId, choice } = payload;
+      if (choice !== "keep" && choice !== "reject") {
+        callback({ success: false, error: "不正な投票内容です" });
+        return;
+      }
+
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -517,6 +656,12 @@ export function registerSessionHandlers(
       const participantId = entry.socketToParticipant.get(socket.id);
       if (!participantId) {
         callback({ success: false, error: "参加者として認識されていません" });
+        return;
+      }
+
+      // 結果確定後・決選投票中の票の書き換えを防ぐ
+      if (entry.session.phase !== "voting") {
+        callback({ success: false, error: "いまは投票できません" });
         return;
       }
 
@@ -545,18 +690,16 @@ export function registerSessionHandlers(
       finalizeVotingIfComplete(io, sessionId);
 
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] submit_vote error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 複数キープ時: 評価順1位で決定（ホストのみ）
    */
-  socket.on("decide_by_rating", (payload, callback) => {
-    const { sessionId } = payload;
-    try {
+  socket.on(
+    "decide_by_rating",
+    guardHandler("decide_by_rating", (payload, callback) => {
+      const { sessionId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -598,18 +741,16 @@ export function registerSessionHandlers(
         session: entry.session,
       });
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] decide_by_rating error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 複数キープ時: 決選投票を開始（マルチのホストのみ）
    */
-  socket.on("start_runoff", (payload, callback) => {
-    const { sessionId } = payload;
-    try {
+  socket.on(
+    "start_runoff",
+    guardHandler("start_runoff", (payload, callback) => {
+      const { sessionId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -657,18 +798,16 @@ export function registerSessionHandlers(
         session: updated.session,
       });
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] start_runoff error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 決選投票の1票を送信（全員分揃ったら自動確定）
    */
-  socket.on("submit_runoff_vote", (payload, callback) => {
-    const { sessionId, restaurantId } = payload;
-    try {
+  socket.on(
+    "submit_runoff_vote",
+    guardHandler("submit_runoff_vote", (payload, callback) => {
+      const { sessionId, restaurantId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -706,18 +845,16 @@ export function registerSessionHandlers(
 
       finalizeRunoffIfComplete(io, sessionId);
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] submit_runoff_vote error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * ソロモード: 複数キープの一覧から1店を選んで決定
    */
-  socket.on("decide_pick", (payload, callback) => {
-    const { sessionId, restaurantId } = payload;
-    try {
+  socket.on(
+    "decide_pick",
+    guardHandler("decide_pick", (payload, callback) => {
+      const { sessionId, restaurantId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -766,19 +903,17 @@ export function registerSessionHandlers(
         session: entry.session,
       });
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] decide_pick error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * ページリロード後のセッション再参加
    * 新しいsocket.idでsocketToParticipantマップを更新し、ルームに再参加する。
    */
-  socket.on("rejoin_session", (payload, callback) => {
-    const { sessionId, participantId, token } = payload;
-    try {
+  socket.on(
+    "rejoin_session",
+    guardHandler("rejoin_session", (payload, callback) => {
+      const { sessionId, participantId, token } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: false, error: "セッションが見つかりません" });
@@ -827,19 +962,17 @@ export function registerSessionHandlers(
         runoffVotedCount: updated.runoffVotes.size,
         finalDecision: updated.finalDecision,
       });
-    } catch (err) {
-      console.error("[Socket] rejoin_session error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * セッションからの明示的な退出（戻るボタン・もう一度さがす等）
    * 切断と違い猶予期間なしで即座に除名・後始末を行う。
    */
-  socket.on("leave_session", (payload, callback) => {
-    const { sessionId } = payload;
-    try {
+  socket.on(
+    "leave_session",
+    guardHandler("leave_session", (payload, callback) => {
+      const { sessionId } = payload;
       const entry = getSession(sessionId);
       if (!entry) {
         callback({ success: true });
@@ -863,11 +996,8 @@ export function registerSessionHandlers(
 
       removeAndReconcile(io, sessionId, participantId);
       callback({ success: true });
-    } catch (err) {
-      console.error("[Socket] leave_session error:", err);
-      callback({ success: false, error: "Internal server error" });
-    }
-  });
+    }),
+  );
 
   /**
    * 切断時の処理
@@ -878,14 +1008,14 @@ export function registerSessionHandlers(
     console.log(`[Socket] disconnect handled for socket: ${socket.id}`);
 
     // socketマッピングのみ外す（participants配列はそのまま残す）
-    const detached = detachSocketFromParticipant(socket.id);
-    if (!detached) return;
-
-    const { sessionId, participantId } = detached;
-
-    // 猶予期間後に除名・後始末（rejoin されたらキャンセルされる）
-    scheduleDisconnect(participantId, () => {
-      removeAndReconcile(io, sessionId, participantId);
-    });
+    // 同一ソケットが複数セッションに紐づいていた場合もすべて後始末する
+    for (const { sessionId, participantId } of detachSocketFromParticipant(
+      socket.id,
+    )) {
+      // 猶予期間後に除名・後始末（rejoin されたらキャンセルされる）
+      scheduleDisconnect(participantId, () => {
+        removeAndReconcile(io, sessionId, participantId);
+      });
+    }
   });
 }

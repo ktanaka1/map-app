@@ -45,6 +45,9 @@ const disconnectTimers = new Map<string, NodeJS.Timeout>();
 
 const GRACE_PERIOD_MS = 15_000;
 
+export const MAX_PARTICIPANTS = 10;
+export const MAX_KEYWORDS = 20;
+
 /**
  * 切断時に遅延削除をスケジュールする。
  * callback は GRACE_PERIOD_MS 後に呼ばれる（rejoin されなかった場合のクリーンアップ用）。
@@ -56,7 +59,12 @@ export function scheduleDisconnect(
   cancelDisconnect(participantId);
   const timer = setTimeout(() => {
     disconnectTimers.delete(participantId);
-    callback();
+    // リクエストコンテキスト外の実行なので、例外を握らないとプロセスごと落ちる
+    try {
+      callback();
+    } catch (err) {
+      console.error("[sessionStore] disconnect timer callback error:", err);
+    }
   }, GRACE_PERIOD_MS);
   disconnectTimers.set(participantId, timer);
 }
@@ -130,6 +138,13 @@ export function getSession(sessionId: string): InMemorySession | undefined {
 }
 
 export function deleteSession(sessionId: string): void {
+  const entry = sessions.get(sessionId);
+  if (entry) {
+    // 削除済みセッションに対して切断猶予タイマーが発火しないようにする
+    for (const participant of entry.session.participants) {
+      cancelDisconnect(participant.id);
+    }
+  }
   sessions.delete(sessionId);
 }
 
@@ -144,6 +159,23 @@ export function addParticipant(
   if (!entry) return { error: "セッションが見つかりません" };
   if (entry.session.phase !== "waiting")
     return { error: "参加受付は終了しました" };
+
+  // 同一ソケットからの再送（ダブルタップ・ack未達リトライ）は既存の参加者を返す。
+  // 無条件に追加すると幽霊参加者が生まれ、全員投票の完了判定が永遠に成立しなくなる。
+  const existingId = entry.socketToParticipant.get(socketId);
+  if (existingId) {
+    const existing = entry.session.participants.find(
+      (p) => p.id === existingId,
+    );
+    const existingToken = entry.participantTokens.get(existingId);
+    if (existing && existingToken) {
+      return { entry, participant: existing, token: existingToken };
+    }
+  }
+
+  if (entry.session.participants.length >= MAX_PARTICIPANTS) {
+    return { error: `参加人数の上限（${MAX_PARTICIPANTS}人）に達しています` };
+  }
 
   const participant: Participant = { id: uuidv4(), name, isHost: false };
   const token = uuidv4();
@@ -192,6 +224,11 @@ export function setRestaurants(
   const entry = sessions.get(sessionId);
   if (!entry) return;
   entry.restaurants = restaurants;
+  // 候補の差し替え時に旧検索の票・結果が残ると、rejoin 復元や完了判定が壊れる
+  entry.votes.clear();
+  entry.runoffVotes.clear();
+  entry.result = null;
+  entry.finalDecision = null;
 }
 
 export function recordVote(
@@ -352,22 +389,26 @@ export function updateSocketMapping(
 /**
  * socketIdのマッピングのみ削除し、participants配列はそのままにする。
  * リロード猶予期間中は参加者をセッションに残すために使用する。
+ * 1ソケットが複数セッションに紐づいていた場合も漏れなく掃除できるよう全件返す。
  */
-export function detachSocketFromParticipant(socketId: string):
-  | {
-      sessionId: string;
-      participantId: string;
-      entry: InMemorySession;
-    }
-  | undefined {
+export function detachSocketFromParticipant(socketId: string): Array<{
+  sessionId: string;
+  participantId: string;
+  entry: InMemorySession;
+}> {
+  const detached: Array<{
+    sessionId: string;
+    participantId: string;
+    entry: InMemorySession;
+  }> = [];
   for (const [sessionId, entry] of sessions.entries()) {
     const participantId = entry.socketToParticipant.get(socketId);
     if (participantId) {
       entry.socketToParticipant.delete(socketId);
-      return { sessionId, participantId, entry };
+      detached.push({ sessionId, participantId, entry });
     }
   }
-  return undefined;
+  return detached;
 }
 
 /** participantIdで参加者をセッションから削除する */
