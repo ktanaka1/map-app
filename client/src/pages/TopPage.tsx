@@ -15,9 +15,11 @@ function TopPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    // URLSearchParams.get はデコード済みの値を返すため、ここで再デコードしない
+    // （msg に % が含まれると URIError で画面全体が落ちる）
     const msg = params.get("ended");
     if (msg) {
-      setEndedMessage(decodeURIComponent(msg));
+      setEndedMessage(msg);
       window.history.replaceState({}, "", "/");
     }
   }, []);
@@ -62,6 +64,8 @@ function TopPage() {
       navigate(`/join/${outcome.sessionId}`);
     } else if (outcome.status === "invalid") {
       alert("このQRコードはセッションのものではありません");
+    } else if (outcome.status === "error") {
+      alert(outcome.message);
     }
     // cancelled は何もしない
   };
@@ -166,7 +170,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   scrollArea: {
     flex: 1,
-    overflowY: "hidden",
+    // 小画面（iPhone SE等）でコンテンツが切れて操作不能にならないようスクロール可能にする
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
     padding: "max(40px, calc(var(--safe-top) + 16px)) 16px 16px",
     display: "flex",
     flexDirection: "column",

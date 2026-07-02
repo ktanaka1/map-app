@@ -55,6 +55,10 @@ type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3000";
 
+/** ack 付き emit の応答待ちタイムアウト（ms）。サーバー無応答時に UI が固まるのを防ぐ */
+const ACK_TIMEOUT_MS = 10000;
+const TIMEOUT_ERROR = "通信がタイムアウトしました。もう一度お試しください";
+
 export interface SessionState {
   session: Session | null;
   /** 自分の参加者情報 */
@@ -200,6 +204,9 @@ function getSocket(): AppSocket {
 export function useSocket(): UseSocketReturn {
   const socketRef = useRef<AppSocket>(getSocket());
   const [state, setState] = useState<SessionState>(initialState);
+  // vote_submitted の重複配信で投票数が水増しされるのを防ぐ
+  // （participantId:restaurantId の組で受信済みを記録する）
+  const seenVotesRef = useRef<Set<string>>(new Set());
   const [isRejoining, setIsRejoining] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(
     socketRef.current.connected,
@@ -234,17 +241,23 @@ export function useSocket(): UseSocketReturn {
       setIsRejoining(true);
       console.log("[Socket] rejoin_session 試行:", stored.sessionId);
 
-      socket.emit(
+      socket.timeout(ACK_TIMEOUT_MS).emit(
         "rejoin_session",
         {
           sessionId: stored.sessionId,
           participantId: stored.participantId,
           token: stored.token ?? "",
         },
-        (res) => {
+        (err, res) => {
           setIsRejoining(false);
+          if (err) {
+            // タイムアウト: 接続は維持し、次回の connect イベントで再試行される
+            console.warn("[Socket] rejoin_session タイムアウト");
+            return;
+          }
           if (res.success && res.session && res.participant) {
             console.log("[Socket] rejoin_session 成功:", stored.sessionId);
+            seenVotesRef.current.clear();
             setState({
               ...initialState,
               session: res.session,
@@ -264,7 +277,11 @@ export function useSocket(): UseSocketReturn {
           } else {
             console.warn("[Socket] rejoin_session 失敗:", res.error);
             clearSessionFromStorage();
-            window.location.href = "/";
+            // TopPage の ended 表示機構を再利用して理由を伝える
+            // （URLSearchParams.get が1回デコードするため、ここで1回だけエンコードする）
+            window.location.replace(
+              `/?ended=${encodeURIComponent("セッションが見つかりませんでした")}`,
+            );
           }
         },
       );
@@ -344,9 +361,17 @@ export function useSocket(): UseSocketReturn {
       completedCount: number;
       totalCount: number;
     }) => {
+      // 同じ参加者×店舗の重複イベントでは累計投票数を加算しない
+      const voteKey = `${payload.participantId}:${payload.restaurantId}`;
+      const isDuplicate = seenVotesRef.current.has(voteKey);
+      seenVotesRef.current.add(voteKey);
       setState((prev) => {
+        // completedCount は絶対値なので重複時もそのまま反映してよい（冪等）
         const newProgress = new Map(prev.voteProgress);
         newProgress.set(payload.restaurantId, payload.completedCount);
+        if (isDuplicate) {
+          return { ...prev, voteProgress: newProgress };
+        }
         const newParticipantCounts = new Map(prev.participantVoteCounts);
         newParticipantCounts.set(
           payload.participantId,
@@ -415,6 +440,8 @@ export function useSocket(): UseSocketReturn {
     };
 
     const onRestaurantsFound = (payload: { restaurants: Restaurant[] }) => {
+      // 新しい投票ラウンドが始まるため、受信済み投票の記録をリセットする
+      seenVotesRef.current.clear();
       updateState({ restaurants: payload.restaurants });
     };
 
@@ -463,24 +490,31 @@ export function useSocket(): UseSocketReturn {
         error?: string;
       }) => void,
     ) => {
-      socketRef.current.emit("create_session", { mode, hostName }, (res) => {
-        if (res.success && res.participant && res.session) {
-          setState({
-            ...initialState,
-            session: res.session,
-            me: res.participant,
-            participants: res.session.participants,
-          });
-          saveSessionToStorage({
-            sessionId: res.session.id,
-            participantId: res.participant.id,
-            participantName: res.participant.name,
-            isHost: res.participant.isHost,
-            token: res.token ?? "",
-          });
-        }
-        callback(res);
-      });
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("create_session", { mode, hostName }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
+          if (res.success && res.participant && res.session) {
+            seenVotesRef.current.clear();
+            setState({
+              ...initialState,
+              session: res.session,
+              me: res.participant,
+              participants: res.session.participants,
+            });
+            saveSessionToStorage({
+              sessionId: res.session.id,
+              participantId: res.participant.id,
+              participantName: res.participant.name,
+              isHost: res.participant.isHost,
+              token: res.token ?? "",
+            });
+          }
+          callback(res);
+        });
     },
     [],
   );
@@ -496,11 +530,15 @@ export function useSocket(): UseSocketReturn {
         participant?: Participant;
       }) => void,
     ) => {
-      socketRef.current.emit(
-        "join_session",
-        { sessionId, participantName },
-        (res) => {
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("join_session", { sessionId, participantName }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
           if (res.success && res.session && res.participant) {
+            seenVotesRef.current.clear();
             setState((prev) => ({
               ...prev,
               session: res.session!,
@@ -516,8 +554,7 @@ export function useSocket(): UseSocketReturn {
             });
           }
           callback(res);
-        },
-      );
+        });
     },
     [],
   );
@@ -527,7 +564,15 @@ export function useSocket(): UseSocketReturn {
       sessionId: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit("confirm_participants", { sessionId }, callback);
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("confirm_participants", { sessionId }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
+          callback(res);
+        });
     },
     [],
   );
@@ -538,7 +583,15 @@ export function useSocket(): UseSocketReturn {
       keyword: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit("add_keyword", { sessionId, keyword }, callback);
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("add_keyword", { sessionId, keyword }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
+          callback(res);
+        });
     },
     [],
   );
@@ -549,11 +602,15 @@ export function useSocket(): UseSocketReturn {
       keyword: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit(
-        "remove_keyword",
-        { sessionId, keyword },
-        callback,
-      );
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("remove_keyword", { sessionId, keyword }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
+          callback(res);
+        });
     },
     [],
   );
@@ -566,11 +623,19 @@ export function useSocket(): UseSocketReturn {
       callback: (res: { success: boolean; error?: string }) => void,
       maxPriceLevel: number | null = null,
     ) => {
-      socketRef.current.emit(
-        "start_search",
-        { sessionId, location, radius, maxPriceLevel },
-        callback,
-      );
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit(
+          "start_search",
+          { sessionId, location, radius, maxPriceLevel },
+          (err, res) => {
+            if (err) {
+              callback({ success: false, error: TIMEOUT_ERROR });
+              return;
+            }
+            callback(res);
+          },
+        );
     },
     [],
   );
@@ -582,20 +647,26 @@ export function useSocket(): UseSocketReturn {
       choice: "keep" | "reject",
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit(
-        "submit_vote",
-        { sessionId, restaurantId, choice },
-        (res) => {
-          if (res.success) {
-            setState((prev) => {
-              const newVoted = new Set(prev.votedRestaurantIds);
-              newVoted.add(restaurantId);
-              return { ...prev, votedRestaurantIds: newVoted };
-            });
-          }
-          callback(res);
-        },
-      );
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit(
+          "submit_vote",
+          { sessionId, restaurantId, choice },
+          (err, res) => {
+            if (err) {
+              callback({ success: false, error: TIMEOUT_ERROR });
+              return;
+            }
+            if (res.success) {
+              setState((prev) => {
+                const newVoted = new Set(prev.votedRestaurantIds);
+                newVoted.add(restaurantId);
+                return { ...prev, votedRestaurantIds: newVoted };
+              });
+            }
+            callback(res);
+          },
+        );
     },
     [],
   );
@@ -613,30 +684,37 @@ export function useSocket(): UseSocketReturn {
         restaurants?: Restaurant[];
       }) => void,
     ) => {
-      socketRef.current.emit(
-        "rejoin_session",
-        { sessionId, participantId, token },
-        (res) => {
-          if (res.success && res.session && res.participant) {
-            setState({
-              ...initialState,
-              session: res.session,
-              me: res.participant,
-              participants: res.session.participants,
-              restaurants: res.restaurants ?? [],
-              votedRestaurantIds: new Set(res.votedRestaurantIds ?? []),
-              participantVoteCounts: new Map(
-                Object.entries(res.participantVoteCounts ?? {}),
-              ),
-              votingResult: res.votingResult ?? null,
-              myRunoffVote: res.myRunoffVote ?? null,
-              runoffVotedCount: res.runoffVotedCount ?? 0,
-              finalDecision: res.finalDecision ?? null,
-            });
-          }
-          callback(res);
-        },
-      );
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit(
+          "rejoin_session",
+          { sessionId, participantId, token },
+          (err, res) => {
+            if (err) {
+              callback({ success: false, error: TIMEOUT_ERROR });
+              return;
+            }
+            if (res.success && res.session && res.participant) {
+              seenVotesRef.current.clear();
+              setState({
+                ...initialState,
+                session: res.session,
+                me: res.participant,
+                participants: res.session.participants,
+                restaurants: res.restaurants ?? [],
+                votedRestaurantIds: new Set(res.votedRestaurantIds ?? []),
+                participantVoteCounts: new Map(
+                  Object.entries(res.participantVoteCounts ?? {}),
+                ),
+                votingResult: res.votingResult ?? null,
+                myRunoffVote: res.myRunoffVote ?? null,
+                runoffVotedCount: res.runoffVotedCount ?? 0,
+                finalDecision: res.finalDecision ?? null,
+              });
+            }
+            callback(res);
+          },
+        );
     },
     [],
   );
@@ -646,10 +724,14 @@ export function useSocket(): UseSocketReturn {
       sessionId: string,
       callback?: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit("leave_session", { sessionId }, (res) => {
-        setState(initialState);
-        callback?.(res);
-      });
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("leave_session", { sessionId }, (err, res) => {
+          // 退出はサーバー無応答でもローカル状態を破棄して先へ進める
+          setState(initialState);
+          seenVotesRef.current.clear();
+          callback?.(err ? { success: false, error: TIMEOUT_ERROR } : res);
+        });
     },
     [],
   );
@@ -659,7 +741,11 @@ export function useSocket(): UseSocketReturn {
       sessionId: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit("decide_by_rating", { sessionId }, callback);
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("decide_by_rating", { sessionId }, (err, res) => {
+          callback(err ? { success: false, error: TIMEOUT_ERROR } : res);
+        });
     },
     [],
   );
@@ -669,7 +755,11 @@ export function useSocket(): UseSocketReturn {
       sessionId: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit("start_runoff", { sessionId }, callback);
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("start_runoff", { sessionId }, (err, res) => {
+          callback(err ? { success: false, error: TIMEOUT_ERROR } : res);
+        });
     },
     [],
   );
@@ -680,16 +770,18 @@ export function useSocket(): UseSocketReturn {
       restaurantId: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit(
-        "submit_runoff_vote",
-        { sessionId, restaurantId },
-        (res) => {
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("submit_runoff_vote", { sessionId, restaurantId }, (err, res) => {
+          if (err) {
+            callback({ success: false, error: TIMEOUT_ERROR });
+            return;
+          }
           if (res.success) {
             setState((prev) => ({ ...prev, myRunoffVote: restaurantId }));
           }
           callback(res);
-        },
-      );
+        });
     },
     [],
   );
@@ -700,11 +792,11 @@ export function useSocket(): UseSocketReturn {
       restaurantId: string,
       callback: (res: { success: boolean; error?: string }) => void,
     ) => {
-      socketRef.current.emit(
-        "decide_pick",
-        { sessionId, restaurantId },
-        callback,
-      );
+      socketRef.current
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("decide_pick", { sessionId, restaurantId }, (err, res) => {
+          callback(err ? { success: false, error: TIMEOUT_ERROR } : res);
+        });
     },
     [],
   );

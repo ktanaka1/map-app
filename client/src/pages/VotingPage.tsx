@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDrag } from "@use-gesture/react";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import type { VoteChoice } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
+import { phaseToPath } from "../services/phaseRoute";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 const SWIPE_THRESHOLD = 100;
@@ -37,20 +38,36 @@ function VotingPage() {
 
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  // ack が返る前の再スワイプ/再タップで票が上書きされるのを防ぐ
+  const votePendingRef = useRef(false);
+  const [voteError, setVoteError] = useState<string | null>(null);
 
-  // フェーズが変わったらリダイレクト
+  // エラーバナーは数秒で自動的に消す
   useEffect(() => {
-    if (session?.phase === "result") {
-      navigate(`/session/${sessionId}/result`);
+    if (!voteError) return;
+    const timer = setTimeout(() => setVoteError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [voteError]);
+
+  // フェーズがこのページと不一致なら該当画面へリダイレクト
+  // （バックグラウンド復帰で2フェーズ以上進んでいても正しい画面へ遷移できる）
+  useEffect(() => {
+    if (!session || !sessionId) return;
+    if (session.phase !== "voting") {
+      navigate(phaseToPath(sessionId, session.phase));
     }
-  }, [session?.phase, sessionId, navigate]);
+  }, [session, session?.phase, sessionId, navigate]);
 
   const handleVote = (choice: VoteChoice) => {
     if (!currentRestaurant || !sessionId) return;
+    if (votePendingRef.current) return;
+    votePendingRef.current = true;
     triggerHaptic(choice === "keep" ? ImpactStyle.Light : ImpactStyle.Medium);
     submitVote(sessionId, currentRestaurant.id, choice, (res) => {
+      votePendingRef.current = false;
       if (!res.success) {
         console.error("投票に失敗しました:", res.error);
+        setVoteError(res.error ?? "投票に失敗しました。もう一度お試しください");
       }
     });
   };
@@ -93,6 +110,26 @@ function VotingPage() {
 
   return (
     <div style={styles.pageWrapper}>
+      {voteError && (
+        <div
+          style={{
+            position: "fixed",
+            top: "calc(env(safe-area-inset-top, 0px) + 8px)",
+            left: 16,
+            right: 16,
+            zIndex: 1000,
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            color: "#b91c1c",
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        >
+          {voteError}
+        </div>
+      )}
       {/* 固定ヘッダー */}
       <div style={styles.stickyHeader}>
         <div style={styles.headerInner}>

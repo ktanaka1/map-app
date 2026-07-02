@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { SocketProvider } from "./hooks/useSocketContext";
 import ConnectionBanner from "./components/ConnectionBanner";
 import TopPage from "./pages/TopPage";
@@ -26,6 +26,8 @@ function App() {
           <Route path="/session/:sessionId/voting" element={<VotingPage />} />
           {/* 結果表示フェーズ */}
           <Route path="/session/:sessionId/result" element={<ResultPage />} />
+          {/* 未知のURLは白画面にせずトップへ戻す */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </SocketProvider>

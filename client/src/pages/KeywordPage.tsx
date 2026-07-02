@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSocketContext } from "../hooks/useSocketContext";
 import { geocodeAddress } from "../services/geocodingService";
+import { phaseToPath } from "../services/phaseRoute";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 const RADIUS_OPTIONS: { label: string; value: number }[] = [
@@ -46,7 +47,12 @@ function KeywordPage() {
   const [maxPriceLevel, setMaxPriceLevel] = useState<number | null>(null);
 
   const keywords = session?.keywords ?? [];
-  const isHost = state.me?.id === session?.hostId || state.me?.isHost;
+  // session と me が未取得（リロード直後・直リンク）のとき undefined === undefined で
+  // 真になり全員にホストUIが出てしまうため、両方の存在を先に確認する
+  const isHost =
+    session !== null &&
+    state.me !== null &&
+    (state.me.id === session.hostId || state.me.isHost === true);
 
   // GPS取得は1回だけ実行
   const gpsAttempted = useRef(false);
@@ -79,12 +85,14 @@ function KeywordPage() {
     );
   }, []);
 
-  // フェーズが変わったらリダイレクト
+  // フェーズがこのページと不一致なら該当画面へリダイレクト
+  // （バックグラウンド復帰で2フェーズ以上進んでいても正しい画面へ遷移できる）
   useEffect(() => {
-    if (session?.phase === "voting") {
-      navigate(`/session/${sessionId}/voting`);
+    if (!session || !sessionId) return;
+    if (session.phase !== "keyword") {
+      navigate(phaseToPath(sessionId, session.phase));
     }
-  }, [session?.phase, sessionId, navigate]);
+  }, [session, session?.phase, sessionId, navigate]);
 
   const handleAddKeyword = () => {
     const kw = inputValue.trim();
@@ -370,7 +378,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   scrollArea: {
     flex: 1,
-    overflowY: "hidden",
+    // GPS拒否時の手動入力やホスト向けセクションが小画面で切れて
+    // 操作不能にならないようスクロール可能にする
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
     padding: "16px 16px 32px",
     display: "flex",
     flexDirection: "column",

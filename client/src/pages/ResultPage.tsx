@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Restaurant } from "shared/types";
 import { useSocketContext } from "../hooks/useSocketContext";
 import { clearSessionFromStorage } from "../hooks/useSocket";
 import { shareOrCopy } from "../services/share";
+import { phaseToPath, RESULT_PHASES } from "../services/phaseRoute";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 function ResultPage() {
@@ -28,6 +29,15 @@ function ResultPage() {
     myRunoffVote,
     runoffVotedCount,
   } = state;
+
+  // フェーズがこのページと不一致なら該当画面へリダイレクト
+  // （result / runoff はどちらもこのページで表示する）
+  useEffect(() => {
+    if (!session || !sessionId) return;
+    if (!RESULT_PHASES.includes(session.phase)) {
+      navigate(phaseToPath(sessionId, session.phase));
+    }
+  }, [session, session?.phase, sessionId, navigate]);
 
   // 決定確定時にスクロール領域を最上部へ戻す。
   // - behavior:"smooth" は使わない（iOS WKWebView でネイティブ慣性スクロールと
@@ -140,6 +150,7 @@ function ResultPage() {
       dialogTitle: "決まったお店を共有",
     }).then((result) => {
       if (result === "copied") alert("お店の情報をコピーしました");
+      if (result === "failed") alert("共有できませんでした");
     });
   };
 

@@ -15,12 +15,21 @@ export async function geocodeAddress(
   const url = new URL("/api/geocode", API_URL);
   url.searchParams.set("address", address);
 
-  const response = await fetch(url.toString());
-  const data = (await response.json()) as {
-    lat?: number;
-    lng?: number;
-    error?: string;
-  };
+  let response: Response;
+  try {
+    response = await fetch(url.toString());
+  } catch {
+    throw new Error("場所の検索に失敗しました。通信環境をご確認ください");
+  }
+
+  // サーバーダウン・プロキシの502等ではHTMLが返り json() が SyntaxError になるため、
+  // 生の例外をUIに出さないよう正規化する
+  let data: { lat?: number; lng?: number; error?: string };
+  try {
+    data = (await response.json()) as typeof data;
+  } catch {
+    throw new Error("場所の検索に失敗しました。通信環境をご確認ください");
+  }
 
   if (!response.ok) {
     throw new Error(data.error ?? "場所の検索に失敗しました");

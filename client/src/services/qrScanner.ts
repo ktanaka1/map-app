@@ -6,7 +6,8 @@ import {
 export type ScanOutcome =
   | { status: "ok"; sessionId: string }
   | { status: "invalid"; raw: string }
-  | { status: "cancelled" };
+  | { status: "cancelled" }
+  | { status: "error"; message: string };
 
 /**
  * 招待QRが指す URL（`.../join/<sessionId>`）からセッションIDを抽出する。
@@ -35,8 +36,23 @@ export async function scanSessionQr(): Promise<ScanOutcome> {
       scanInstructions: "セッションのQRコードを枠内に収めてください",
     });
     raw = result.ScanResult;
-  } catch {
-    // ユーザーキャンセル・権限拒否など
+  } catch (err) {
+    // ユーザーキャンセルは無反応でよいが、権限拒否・非対応は理由を伝えないと
+    // 「タップしても何も起きないボタン」になる
+    const message = err instanceof Error ? err.message : String(err);
+    if (/permission|denied|not.?allowed|access/i.test(message)) {
+      return {
+        status: "error",
+        message:
+          "カメラへのアクセスが許可されていません。設定アプリからカメラを許可してください",
+      };
+    }
+    if (/not.?implemented|not.?supported|unavailable/i.test(message)) {
+      return {
+        status: "error",
+        message: "この環境ではQRスキャンを利用できません",
+      };
+    }
     return { status: "cancelled" };
   }
 

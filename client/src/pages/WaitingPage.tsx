@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useSocketContext } from "../hooks/useSocketContext";
 import { clearSessionFromStorage } from "../hooks/useSocket";
 import { shareOrCopy } from "../services/share";
+import { phaseToPath } from "../services/phaseRoute";
 import RejoiningOverlay from "../components/RejoiningOverlay";
 
 function WaitingPage() {
@@ -16,12 +17,14 @@ function WaitingPage() {
   const appBase = import.meta.env.VITE_APP_URL ?? window.location.origin;
   const joinUrl = `${appBase}/join/${sessionId}`;
 
-  // フェーズが変わったらリダイレクト
+  // フェーズがこのページと不一致なら該当画面へリダイレクト
+  // （バックグラウンド復帰で2フェーズ以上進んでいても正しい画面へ遷移できる）
   useEffect(() => {
-    if (session?.phase === "keyword") {
-      navigate(`/session/${sessionId}/keyword`);
+    if (!session || !sessionId) return;
+    if (session.phase !== "waiting") {
+      navigate(phaseToPath(sessionId, session.phase));
     }
-  }, [session?.phase, sessionId, navigate]);
+  }, [session, session?.phase, sessionId, navigate]);
 
   const isHost = session
     ? state.me?.id === session.hostId || state.me?.isHost
@@ -48,13 +51,20 @@ function WaitingPage() {
     }).then((result) => {
       // Web で共有シート非対応のときはコピーにフォールバックされる
       if (result === "copied") alert("リンクをコピーしました");
+      if (result === "failed")
+        alert("共有できませんでした。リンクを長押しして選択してください");
     });
   };
 
-  const handleCopyLink = () => {
-    void navigator.clipboard.writeText(joinUrl).then(() => {
+  const handleCopyLink = async () => {
+    // 非セキュアコンテキスト（http での実機テスト等）では clipboard が undefined
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("unavailable");
+      await navigator.clipboard.writeText(joinUrl);
       alert("リンクをコピーしました");
-    });
+    } catch {
+      alert("コピーできませんでした。リンクを長押しして選択してください");
+    }
   };
 
   const handleBack = () => {

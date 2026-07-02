@@ -9,7 +9,7 @@ export type SharePayload = {
   dialogTitle?: string;
 };
 
-export type ShareResult = "shared" | "copied" | "dismissed";
+export type ShareResult = "shared" | "copied" | "dismissed" | "failed";
 
 /**
  * ネイティブ共有シート（iOS の UIActivityViewController = AirDrop/LINE/メッセージ等）を開く。
@@ -49,10 +49,16 @@ export async function shareOrCopy(payload: SharePayload): Promise<ShareResult> {
   }
 
   // フォールバック: クリップボードへコピー
+  // 非セキュアコンテキストでは navigator.clipboard 自体が undefined、
+  // 書き込み拒否時は reject するため、どちらも failed として呼び出し側に伝える
   const copyText = url ?? text ?? "";
-  if (copyText && navigator.clipboard) {
-    await navigator.clipboard.writeText(copyText);
-    return "copied";
+  if (copyText && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(copyText);
+      return "copied";
+    } catch {
+      return "failed";
+    }
   }
-  return "dismissed";
+  return "failed";
 }
